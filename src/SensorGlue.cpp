@@ -23,7 +23,8 @@ SensorFilter<float> current_filter_2(256, FilteringStrategy::RAW);
 SensorFilter<float> fan_speed_0(256, FilteringStrategy::RAW);
 SensorFilter<float> fan_speed_1(256, FilteringStrategy::RAW);
 SensorFilter<float> fan_speed_2(256, FilteringStrategy::RAW);
-
+SensorFilter<float> pump_speed_0(256, FilteringStrategy::RAW);
+SensorFilter<float> pump_speed_1(256, FilteringStrategy::RAW);
 
 
 /*
@@ -60,6 +61,10 @@ int8_t init_sensor_memory() {
   if (0 != fan_speed_1.init()) {       return ret;   }
   ret--;
   if (0 != fan_speed_2.init()) {       return ret;   }
+  ret--;
+  if (0 != pump_speed_0.init()) {      return ret;   }
+  ret--;
+  if (0 != pump_speed_1.init()) {      return ret;   }
 
   return 0;
 }

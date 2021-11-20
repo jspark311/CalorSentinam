@@ -114,10 +114,12 @@ uint32_t last_interaction  = 0;      // millis() when the user last interacted.
 ParsingConsole console(128);
 const char* console_prompt_str = "HeatPump # ";
 
-volatile static uint32_t fan0_tach_counter = 0;
-volatile static uint32_t fan1_tach_counter = 0;
-volatile static uint32_t fan2_tach_counter = 0;
-volatile static uint32_t last_tach_check   = 0;
+volatile static uint32_t fan0_tach_counter  = 0;
+volatile static uint32_t fan1_tach_counter  = 0;
+volatile static uint32_t fan2_tach_counter  = 0;
+volatile static uint32_t pump0_tach_counter = 0;
+volatile static uint32_t pump1_tach_counter = 0;
+volatile static uint32_t last_tach_check    = 0;
 
 static uint16_t fan0_target_rpm   = 200;
 static uint16_t fan1_target_rpm   = 200;
@@ -127,6 +129,7 @@ static uint8_t fan0_pwm_percent   = 100;
 static uint8_t fan1_pwm_percent   = 100;
 static uint8_t fan2_pwm_percent   = 100;
 
+static float    fan_pwm_ratio     = 0.0;
 
 
 /*******************************************************************************
@@ -135,30 +138,37 @@ static uint8_t fan2_pwm_percent   = 100;
 void isr_fan0_tach_fxn() {         fan0_tach_counter++;       }
 void isr_fan1_tach_fxn() {         fan1_tach_counter++;       }
 void isr_fan2_tach_fxn() {         fan2_tach_counter++;       }
+void isr_pump0_tach_fxn() {        pump0_tach_counter++;      }
+void isr_pump1_tach_fxn() {        pump1_tach_counter++;      }
 
 
-
-void update_fan_tach_values() {
+void update_tach_values() {
   const uint32_t FAN_COUNT            = 3;
   const uint32_t FAN_RPM_HYSTERESIS   = 60;
   const uint32_t FAN_PERCENTAGE_DELTA = 2;
   const uint32_t now = millis();
   uint32_t ms_delta_tach = wrap_accounted_delta(last_tach_check, now);
   if (ms_delta_tach >= 1000) {
-    // Every second or so, update the fan tach values.
+    // Every second or so, update the tach values.
     //for (uint i = 0; i < FAN_COUNT; i++) {
     //}
-    uint32_t tmp_fan0_count = fan0_tach_counter;
-    uint32_t tmp_fan1_count = fan1_tach_counter;
-    uint32_t tmp_fan2_count = fan2_tach_counter;
-    fan0_tach_counter -= tmp_fan0_count;
-    fan1_tach_counter -= tmp_fan1_count;
-    fan2_tach_counter -= tmp_fan2_count;
+    uint32_t tmp_fan0_count  = fan0_tach_counter;
+    uint32_t tmp_fan1_count  = fan1_tach_counter;
+    uint32_t tmp_fan2_count  = fan2_tach_counter;
+    uint32_t tmp_pump0_count = pump0_tach_counter;
+    uint32_t tmp_pump1_count = pump1_tach_counter;
+    fan0_tach_counter  -= tmp_fan0_count;
+    fan1_tach_counter  -= tmp_fan1_count;
+    fan2_tach_counter  -= tmp_fan2_count;
+    pump0_tach_counter -= tmp_pump0_count;
+    pump1_tach_counter -= tmp_pump1_count;
 
     // We want RPMs
     fan_speed_0.feedFilter((uint16_t) ((tmp_fan0_count * 30000) / ms_delta_tach));
     fan_speed_1.feedFilter((uint16_t) ((tmp_fan1_count * 30000) / ms_delta_tach));
     fan_speed_2.feedFilter((uint16_t) ((tmp_fan2_count * 30000) / ms_delta_tach));
+    pump_speed_0.feedFilter((uint16_t) ((tmp_pump0_count * 30000) / ms_delta_tach));
+    pump_speed_1.feedFilter((uint16_t) ((tmp_pump1_count * 30000) / ms_delta_tach));
 
     if (fan_speed_0.dirty()) {
       const uint16_t FAN_THRESHOLD_SPEED_UP   = fan0_target_rpm + FAN_RPM_HYSTERESIS;
@@ -168,7 +178,6 @@ void update_fan_tach_values() {
       }
       else if (LAST_RPM_VALUE < FAN_THRESHOLD_SPEED_UP) {    fan0_pwm_percent += FAN_PERCENTAGE_DELTA;   }
       else if (LAST_RPM_VALUE > FAN_THRESHOLD_SPEED_DOWN) {  fan0_pwm_percent -= FAN_PERCENTAGE_DELTA;   }
-      analogWrite(FAN0_PWM_PIN, fan0_pwm_percent);
     }
     if (fan_speed_1.dirty()) {
       const uint16_t FAN_THRESHOLD_SPEED_UP   = fan1_target_rpm + FAN_RPM_HYSTERESIS;
@@ -178,7 +187,6 @@ void update_fan_tach_values() {
       }
       else if (LAST_RPM_VALUE < FAN_THRESHOLD_SPEED_UP) {    fan1_pwm_percent += FAN_PERCENTAGE_DELTA;   }
       else if (LAST_RPM_VALUE > FAN_THRESHOLD_SPEED_DOWN) {  fan1_pwm_percent -= FAN_PERCENTAGE_DELTA;   }
-      analogWrite(FAN1_PWM_PIN, fan1_pwm_percent);
     }
     if (fan_speed_2.dirty()) {
       const uint16_t FAN_THRESHOLD_SPEED_UP   = fan2_target_rpm + FAN_RPM_HYSTERESIS;
@@ -188,7 +196,6 @@ void update_fan_tach_values() {
       }
       else if (LAST_RPM_VALUE < FAN_THRESHOLD_SPEED_UP) {    fan2_pwm_percent += FAN_PERCENTAGE_DELTA;   }
       else if (LAST_RPM_VALUE > FAN_THRESHOLD_SPEED_DOWN) {  fan2_pwm_percent -= FAN_PERCENTAGE_DELTA;   }
-      analogWrite(FAN2_PWM_PIN, fan2_pwm_percent);
     }
     last_tach_check = now;
   }
@@ -401,30 +408,210 @@ int callback_help(StringBuilder* text_return, StringBuilder* args) {
 }
 
 
-int callback_sensor_filter_info(StringBuilder* text_return, StringBuilder* args) {
-  int arg0 = args->position_as_int(0);
-  if (0 < args->count()) {
-    temperature_filter_0.printFilter(text_return);
-    temperature_filter_1.printFilter(text_return);
-    temperature_filter_2.printFilter(text_return);
-    temperature_filter_3.printFilter(text_return);
-    temperature_filter_4.printFilter(text_return);
-    temperature_filter_5.printFilter(text_return);
-    temperature_filter_6.printFilter(text_return);
-    temperature_filter_7.printFilter(text_return);
+
+int callback_sensor_tools(StringBuilder* text_return, StringBuilder* args) {
+  int   ret = 0;
+  char* cmd = args->position_trimmed(0);
+
+  if (0 == StringBuilder::strcasecmp(cmd, "temp")) {
+    //text_return->concatf("temperature sensor refresh returned %d.\n", console.localEcho()?"en":"dis");
   }
-  else {   // No arguments means print the sensor index list.
+  else if (0 == StringBuilder::strcasecmp(cmd, "info")) {
+    if (1 < args->count()) {
+      int arg1 = args->position_as_int(1);
+      switch (arg1) {
+        case 0:   temp_sensor_0.printDebug(text_return);    break;
+        case 1:   temp_sensor_1.printDebug(text_return);    break;
+        case 2:   temp_sensor_2.printDebug(text_return);    break;
+        case 3:   temp_sensor_3.printDebug(text_return);    break;
+        case 4:   temp_sensor_4.printDebug(text_return);    break;
+        case 5:   temp_sensor_5.printDebug(text_return);    break;
+        case 6:   temp_sensor_6.printDebug(text_return);    break;
+        case 7:   temp_sensor_7.printDebug(text_return);    break;
+        default:
+          break;
+      }
+    }
+  }
+  else {
+    ret = -1;
+  }
+  return ret;
+}
+
+
+int callback_sensor_filter_info(StringBuilder* text_return, StringBuilder* args) {
+  int ret = -1;
+  if (0 < args->count()) {
+    int   arg0 = args->position_as_int(0);
+    char* cmd  = args->position_trimmed(1);
+    SensorFilter<float>* sel_sen = nullptr;
+    switch (arg0) {
+      case 0:   sel_sen = &temperature_filter_0;    break;
+      case 1:   sel_sen = &temperature_filter_1;    break;
+      case 2:   sel_sen = &temperature_filter_2;    break;
+      case 3:   sel_sen = &temperature_filter_3;    break;
+      case 4:   sel_sen = &temperature_filter_4;    break;
+      case 5:   sel_sen = &temperature_filter_5;    break;
+      case 6:   sel_sen = &temperature_filter_6;    break;
+      case 7:   sel_sen = &temperature_filter_7;    break;
+      default:
+        break;
+    }
+    if (nullptr != sel_sen) {
+      if (0 == StringBuilder::strcasecmp(cmd, "info")) {
+        sel_sen->printFilter(text_return);
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "purge")) {
+        sel_sen->purge();
+        text_return->concatf("Filter for SensorID %d purged.\n", arg0);
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "depth")) {
+        if (2 < args->count()) {
+          uint arg2 = (uint) args->position_as_int(2);
+          text_return->concatf("Setting sample depth for filter %d returned %d.\n", arg0, sel_sen->windowSize(arg2));
+        }
+        text_return->concatf("Filter for SensorID %d is %u samples deep.\n", arg0, sel_sen->windowSize());
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "strat")) {
+        if (2 < args->count()) {
+          FilteringStrategy arg2 = (FilteringStrategy) args->position_as_int(2);
+          text_return->concatf("Setting sample depth for filter %d returned %d.\n", arg0, sel_sen->setStrategy(arg2));
+        }
+        text_return->concatf("Filter strategy for SensorID %d is %s.\n", arg0, getFilterStr(sel_sen->strategy()));
+      }
+      else {
+        text_return->concatf("Filter value for SensorID %d: %.3f.\n", arg0, (double) sel_sen->value());
+      }
+    }
+    else {
+      text_return->concatf("Invalid SensorID: %d\n", arg0);
+      listAllSensors(text_return);
+    }
+    ret = 0;
+  }
+  else {  // No arguments means print the sensor index list.
     listAllSensors(text_return);
   }
-  return 0;
+  return ret;
+}
+
+
+int callback_fan_tools(StringBuilder* text_return, StringBuilder* args) {
+  int ret = 0;
+  char* cmd = args->position_trimmed(0);
+  if (0 == StringBuilder::strcasecmp(cmd, "info")) {
+    fan_speed_0.printFilter(text_return);
+    fan_speed_1.printFilter(text_return);
+    fan_speed_2.printFilter(text_return);
+  }
+  else if (0 == StringBuilder::strcasecmp(cmd, "speed")) {
+    if (1 < args->count()) {
+      float arg1 = args->position_as_double(1);
+      if ((arg1 >= 0.0) & (arg1 <= 1.0)) {
+        fan_pwm_ratio = arg1;
+        analogWrite(FAN_PWM_PIN, arg1);
+      }
+      else {
+        text_return->concat("Fan speed must be in the range [0, 1].\n");
+      }
+    }
+    text_return->concatf("Fan speed set at %.2f%%\n", fan_pwm_ratio);
+  }
+  else {
+    text_return->concatf("Fan0:\t%d RPM\n", (int) fan_speed_0.value()*60);
+    text_return->concatf("Fan1:\t%d RPM\n", (int) fan_speed_1.value()*60);
+    text_return->concatf("Fan2:\t%d RPM\n", (int) fan_speed_2.value()*60);
+  }
+  return ret;
+}
+
+
+int callback_pump_tools(StringBuilder* text_return, StringBuilder* args) {
+  int ret = 0;
+  bool print_pump0_speed = false;
+  bool print_pump1_speed = false;
+  char* loop = args->position_trimmed(0);
+  char* cmd  = args->position_trimmed(1);
+  if (0 == StringBuilder::strcasecmp(loop, "i")) {
+    if (1 < args->count()) {
+      if (0 == StringBuilder::strcasecmp(cmd, "on")) {
+        setPin(PUMP0_ENABLE_PIN, true);
+        text_return->concat("Pump enabled.\n");
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "off")) {
+        setPin(PUMP0_ENABLE_PIN, false);
+        text_return->concat("Pump disabled.\n");
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "filter")) {
+        pump_speed_0.printFilter(text_return);
+      }
+      else print_pump0_speed = true;
+    }
+    else print_pump0_speed = true;
+  }
+  else if (0 == StringBuilder::strcasecmp(loop, "e")) {
+    if (1 < args->count()) {
+      if (0 == StringBuilder::strcasecmp(cmd, "on")) {
+        setPin(PUMP1_ENABLE_PIN, true);
+        text_return->concat("Pump enabled.\n");
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "off")) {
+        setPin(PUMP1_ENABLE_PIN, false);
+        text_return->concat("Pump disabled.\n");
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "filter")) {
+        pump_speed_1.printFilter(text_return);
+      }
+      else print_pump1_speed = true;
+    }
+    else print_pump1_speed = true;
+  }
+  else {
+    text_return->concat("You must specify the pump for either the internal (i) or external (e) loop.\n");
+    ret = -1;
+  }
+  if (print_pump0_speed) text_return->concatf("Pump0 (Internal):  %d RPM\n", (int) pump_speed_0.value()*60);
+  if (print_pump1_speed) text_return->concatf("Pump1 (External):  %d RPM\n", (int) pump_speed_1.value()*60);
+  return ret;
+}
+
+
+int callback_tec_tools(StringBuilder* text_return, StringBuilder* args) {
+  int   ret  = 0;
+  int   bank = args->position_as_int(0);
+  char* cmd  = args->position_trimmed(1);
+  if (0 < args->count()) {
+    uint8_t bank_pin = TEC_BANK1_PIN;
+    switch (bank) {
+      case 0:
+        bank_pin = TEC_BANK0_PIN;
+      case 1:
+        if (1 < args->count()) {
+          if (0 == StringBuilder::strcasecmp(cmd, "on")) {
+            setPin(bank_pin, true);
+            text_return->concatf("TEC bank %d enabled.\n", bank);
+          }
+          else if (0 == StringBuilder::strcasecmp(cmd, "off")) {
+            setPin(bank_pin, false);
+            text_return->concatf("TEC bank %d disabled.\n", bank);
+          }
+        }
+        else {
+          // TDO: print bank states.
+        }
+        break;
+      default:
+        text_return->concat("You must specify the bank (0 or 1).\n");
+        break;
+    }
+  }
+  return ret;
 }
 
 
 
 int callback_console_tools(StringBuilder* text_return, StringBuilder* args) {
-  //inline void setPromptString(const char* str) {    _prompt_string = (char*) str;   };
-  //inline bool hasColor() {               return _console_flag(CONSOLE_FLAG_HAS_ANSI);                   };
-  //inline void hasColor(bool x) {         return _console_set_flag(CONSOLE_FLAG_HAS_ANSI, x);            };
   int ret = 0;
   char* cmd    = args->position_trimmed(0);
   int   arg1   = args->position_as_int(1);
@@ -542,7 +729,23 @@ void setup() {
   pinMode(LED_G_PIN,      GPIOMode::INPUT);
   pinMode(LED_B_PIN,      GPIOMode::INPUT);
 
-  analogWriteResolution(12);
+  pinMode(FAN0_TACH_PIN,  GPIOMode::INPUT_PULLUP);
+  pinMode(FAN1_TACH_PIN,  GPIOMode::INPUT_PULLUP);
+  pinMode(FAN2_TACH_PIN,  GPIOMode::INPUT_PULLUP);
+  pinMode(PUMP0_TACH_PIN, GPIOMode::INPUT_PULLUP);
+  pinMode(PUMP1_TACH_PIN, GPIOMode::INPUT_PULLUP);
+
+  pinMode(TEC_BANK0_PIN,    GPIOMode::OUTPUT);
+  pinMode(TEC_BANK1_PIN,    GPIOMode::OUTPUT);
+  pinMode(PUMP0_ENABLE_PIN, GPIOMode::OUTPUT);
+  pinMode(PUMP1_ENABLE_PIN, GPIOMode::OUTPUT);
+  pinMode(FAN_PWM_PIN,      GPIOMode::ANALOG_OUT);
+
+  setPin(TEC_BANK0_PIN,    true);
+  setPin(TEC_BANK1_PIN,    true);
+  setPin(PUMP0_ENABLE_PIN, true);
+  setPin(PUMP1_ENABLE_PIN, true);
+  analogWrite(FAN_PWM_PIN, 0.0f);
 
   uint16_t serial_timeout = 0;
   while (!Serial && (100 > serial_timeout)) {
@@ -561,11 +764,14 @@ void setup() {
     console_uart.write("Failed to allocate memory for sensors.\n");
   }
 
-
   console.defineCommand("help",        '?', ParsingConsole::tcodes_str_1, "Prints help to console.", "", 0, callback_help);
   platform.configureConsole(&console);
   //console.defineCommand("disp",        'd', ParsingConsole::tcodes_uint_1, "Display test", "", 1, callback_display_test);
-  console.defineCommand("sfi",         ParsingConsole::tcodes_uint_1, "Sensor filter info.", "", 0, callback_sensor_filter_info);
+  console.defineCommand("sensor",      's',  ParsingConsole::tcodes_str_4, "Sensor tools", "", 0, callback_sensor_tools);
+  console.defineCommand("filter",      '\0', ParsingConsole::tcodes_str_3, "Sensor filter info.", "", 0, callback_sensor_filter_info);
+  console.defineCommand("fan",         'f',  ParsingConsole::tcodes_str_3, "Fan tools", "", 0, callback_fan_tools);
+  console.defineCommand("pump",        'p',  ParsingConsole::tcodes_str_3, "Pump tools", "", 0, callback_pump_tools);
+  console.defineCommand("tec",         't',  ParsingConsole::tcodes_str_3, "TEC tools", "", 0, callback_tec_tools);
   console.defineCommand("i2c",         '\0', ParsingConsole::tcodes_uint_3, "I2C tools", "Usage: i2c <bus> <action> [addr]", 1, callback_i2c_tools);
   console.defineCommand("console",     '\0', ParsingConsole::tcodes_str_3, "Console conf.", "[echo|prompt|force|rxterm|txterm]", 0, callback_console_tools);
   console.defineCommand("link",        'l', ParsingConsole::tcodes_str_4, "Linked device tools.", "", 0, callback_link_tools);
@@ -578,23 +784,20 @@ void setup() {
 
   //grideye.assignBusInstance(&i2c1);
 
-  temp_sensor_0.assignBusInstance(&i2c0);
-  temp_sensor_1.assignBusInstance(&i2c0);
-  temp_sensor_2.assignBusInstance(&i2c0);
-  temp_sensor_3.assignBusInstance(&i2c0);
-  temp_sensor_4.assignBusInstance(&i2c1);
-  temp_sensor_5.assignBusInstance(&i2c1);
-  temp_sensor_6.assignBusInstance(&i2c1);
-  temp_sensor_7.assignBusInstance(&i2c1);
+  temp_sensor_0.init(&i2c0);
+  temp_sensor_1.init(&i2c0);
+  temp_sensor_2.init(&i2c0);
+  temp_sensor_3.init(&i2c0);
+  temp_sensor_4.init(&i2c1);
+  temp_sensor_5.init(&i2c1);
+  temp_sensor_6.init(&i2c1);
+  temp_sensor_7.init(&i2c1);
 
-  temp_sensor_0.enabled(true);
-  temp_sensor_1.enabled(true);
-  temp_sensor_2.enabled(true);
-  temp_sensor_3.enabled(true);
-  temp_sensor_4.enabled(true);
-  temp_sensor_5.enabled(true);
-  temp_sensor_6.enabled(true);
-  temp_sensor_7.enabled(true);
+  setPinFxn(FAN0_TACH_PIN,  IRQCondition::FALLING, isr_fan0_tach_fxn);
+  setPinFxn(FAN1_TACH_PIN,  IRQCondition::FALLING, isr_fan1_tach_fxn);
+  setPinFxn(FAN2_TACH_PIN,  IRQCondition::FALLING, isr_fan2_tach_fxn);
+  setPinFxn(PUMP0_TACH_PIN, IRQCondition::FALLING, isr_pump0_tach_fxn);
+  setPinFxn(PUMP1_TACH_PIN, IRQCondition::FALLING, isr_pump1_tach_fxn);
 
   config_time = millis();
 }
@@ -638,6 +841,31 @@ void loop() {
   //  }
   //  stopwatch_sensor_grideye.markStop();
   //}
+
+  if (1 == temp_sensor_0.poll()) {
+    temperature_filter_0.feedFilter(temp_sensor_0.temperature());
+  }
+  if (1 == temp_sensor_1.poll()) {
+    temperature_filter_1.feedFilter(temp_sensor_1.temperature());
+  }
+  if (1 == temp_sensor_2.poll()) {
+    temperature_filter_2.feedFilter(temp_sensor_2.temperature());
+  }
+  if (1 == temp_sensor_3.poll()) {
+    temperature_filter_3.feedFilter(temp_sensor_3.temperature());
+  }
+  if (1 == temp_sensor_4.poll()) {
+    temperature_filter_4.feedFilter(temp_sensor_4.temperature());
+  }
+  if (1 == temp_sensor_5.poll()) {
+    temperature_filter_5.feedFilter(temp_sensor_5.temperature());
+  }
+  if (1 == temp_sensor_6.poll()) {
+    temperature_filter_6.feedFilter(temp_sensor_6.temperature());
+  }
+  if (1 == temp_sensor_7.poll()) {
+    temperature_filter_7.feedFilter(temp_sensor_7.temperature());
+  }
 
   comm_unit_uart.poll();
   console.printToLog(&output);

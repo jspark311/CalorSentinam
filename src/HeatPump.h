@@ -17,10 +17,19 @@
 *******************************************************************************/
 #define COMM_TX_PIN          0   // MCU RX
 #define COMM_RX_PIN          1   // MCU TX
-#define FAN0_PWM_PIN         2
-#define FAN1_PWM_PIN         3
-#define FAN2_PWM_PIN         4
-#define DISPLAY_CS_PIN      10
+#define FAN0_TACH_PIN        2
+#define FAN1_TACH_PIN        3
+#define FAN2_TACH_PIN        4
+#define PUMP0_TACH_PIN       5
+#define PUMP1_TACH_PIN       6
+#define PUMP0_ENABLE_PIN     7
+#define PUMP1_ENABLE_PIN     8
+#define FAN_PWM_PIN          9
+#define TEC_BANK0_PIN       20
+#define TEC_BANK1_PIN       21
+
+
+//#define DISPLAY_CS_PIN      10
 #define SPIMOSI_PIN         11
 #define SPIMISO_PIN         12
 #define SPISCK_PIN          13
@@ -34,6 +43,8 @@
 #define AMG8866_IRQ_PIN    255 // 30
 #define DISPLAY_RST_PIN     32
 #define LED_B_PIN           33
+
+
 
 
 /*******************************************************************************

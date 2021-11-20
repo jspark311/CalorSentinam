@@ -22,6 +22,8 @@ extern SensorFilter<float> current_filter_2;
 extern SensorFilter<uint16_t> fan_speed_0;
 extern SensorFilter<uint16_t> fan_speed_1;
 extern SensorFilter<uint16_t> fan_speed_2;
+extern SensorFilter<uint16_t> pump_speed_0;
+extern SensorFilter<uint16_t> pump_speed_1;
 
 
 int8_t init_sensor_memory();
