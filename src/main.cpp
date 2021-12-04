@@ -26,6 +26,11 @@
 * Globals
 *******************************************************************************/
 
+// Our thermal flow model needs some parameters of the machine.
+const float MASS_OF_EXCHANGER         250.0     // Grams
+const float MASS_OF_INTERNAL_COOLANT  100.0     // Grams
+
+
 const I2CAdapterOptions i2c0_opts(
   0,   // Device number
   SDA0_PIN,
