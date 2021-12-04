@@ -3,7 +3,6 @@
 
 /* Sensor representations */
 extern TMP102 tmp102;
-extern GridEYE grideye;
 
 /* SensorFilters. These are the memory hogs. */
 extern SensorFilter<float> temperature_filter_0;

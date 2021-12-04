@@ -15,21 +15,21 @@ static uint32_t off_time_led_b    = 0;      // millis() when LED_B should be dis
 * LED and vibrator control
 * Only have enable functions since disable is done by timer in the main loop.
 *******************************************************************************/
-void ledOn(uint8_t idx, uint32_t duration, uint16_t intensity = 3500) {
+void ledOn(uint8_t idx, uint32_t duration, uint16_t intensity) {
   uint32_t* millis_ptr = nullptr;
   switch (idx) {
-    case LED_R_PIN:
-      analogWrite(LED_R_PIN, intensity);
-      millis_ptr = &off_time_led_r;
-      break;
-    case LED_G_PIN:
-      analogWrite(LED_G_PIN, intensity);
-      millis_ptr = &off_time_led_g;
-      break;
-    case LED_B_PIN:
-      analogWrite(LED_B_PIN, intensity);
-      millis_ptr = &off_time_led_b;
-      break;
+  //  case LED_R_PIN:
+  //    analogWrite(LED_R_PIN, intensity);
+  //    millis_ptr = &off_time_led_r;
+  //    break;
+  //  case LED_G_PIN:
+  //    analogWrite(LED_G_PIN, intensity);
+  //    millis_ptr = &off_time_led_g;
+  //    break;
+  //  case LED_B_PIN:
+  //    analogWrite(LED_B_PIN, intensity);
+  //    millis_ptr = &off_time_led_b;
+  //    break;
     default:
       return;
   }
@@ -40,9 +40,9 @@ void ledOn(uint8_t idx, uint32_t duration, uint16_t intensity = 3500) {
 
 void timeoutCheckVibLED() {
   uint32_t millis_now = millis();
-  if (millis_now >= off_time_led_r) {   pinMode(LED_R_PIN, GPIOMode::INPUT);     }
-  if (millis_now >= off_time_led_g) {   pinMode(LED_G_PIN, GPIOMode::INPUT);     }
-  if (millis_now >= off_time_led_b) {   pinMode(LED_B_PIN, GPIOMode::INPUT);     }
+  //if (millis_now >= off_time_led_r) {   pinMode(LED_R_PIN, GPIOMode::INPUT);     }
+  //if (millis_now >= off_time_led_g) {   pinMode(LED_G_PIN, GPIOMode::INPUT);     }
+  //if (millis_now >= off_time_led_b) {   pinMode(LED_B_PIN, GPIOMode::INPUT);     }
 }
 
 
@@ -71,8 +71,6 @@ void listAllSensors(StringBuilder* output) {
     output->concatf("%2u: %s\n", i, getSensorIDString((SensorID) i));
   }
 }
-
-
 
 
 
