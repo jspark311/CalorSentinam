@@ -17,29 +17,56 @@
 * Pin definitions and hardware constants.
 *******************************************************************************/
 /* Platform pins */
-#define FAN0_TACH_PIN       12
-#define FAN1_TACH_PIN       14
-#define FAN2_TACH_PIN       15
+#define DISPLAY_RST_PIN      4
+#define DISPLAY_DC_PIN      12
+#define DISPLAY_CS_PIN      14
+#define FAN_PWM_PIN         15
 #define SCL1_PIN            16   // Sensor service bus.
 #define SDA1_PIN            17   // Sensor service bus.
 #define SDA0_PIN            18   // Touch controller and PMU bus.
 #define SCL0_PIN            19   // Touch controller and PMU bus.
 
-#define FAN_PWM_PIN         21
-#define PUMP0_ENABLE_PIN    22
-#define PUMP1_ENABLE_PIN    23
-
+#define SX8634_RESET_PIN    21
+#define SX8634_IRQ_PIN      22
+#define SX1503_IRQ_PIN      23
 #define SPICLK_PIN          25
-#define TEC_BANK0_PIN       26
-#define TEC_BANK1_PIN       27
+#define SPIMISO_PIN         26
+#define SPIMOSI_PIN         27
+#define FAN0_TACH_PIN       32
+#define FAN1_TACH_PIN       33
+#define FAN2_TACH_PIN       34
+#define PUMP0_TACH_PIN      35
+#define PUMP1_TACH_PIN      39
 
-#define SPIMOSI_PIN         32
-#define PUMP0_TACH_PIN      33
-#define PUMP1_TACH_PIN      34
-#define SPIMISO_PIN         35
 
-//#define DISPLAY_DC_PIN      26
-//#define DISPLAY_RST_PIN     32
+/* SX1503 GPIO pins */
+// All outputs are on a 5V power domain and default to a condition "disabled".
+#define PUMP0_ENABLE_PIN     0  // Enables a pump.
+#define PUMP1_ENABLE_PIN     1  // Enables a pump.
+#define AUX0_ENABLE_PIN      2  // Reserved for relays, fans, etc.
+#define AUX1_ENABLE_PIN      3  // Reserved for relays, fans, etc.
+#define TEC_BANK0_P_PIN      4  // H-bridge control
+#define TEC_BANK0_N_PIN      5  // H-bridge control
+#define TEC_BANK1_P_PIN      6  // H-bridge control
+#define TEC_BANK1_N_PIN      7  // H-bridge control
+
+#define DEBUG_LED_0_PIN      8  // Status output
+#define DEBUG_LED_1_PIN      9  // Status output
+#define DEBUG_LED_2_PIN     10  // Status output
+#define DEBUG_LED_3_PIN     11  // Status output
+#define RESERVED_IN_0_PIN   12  //
+#define RESERVED_IN_1_PIN   13  //
+#define CIRCUIT_CONF0_PIN   14  // Used to tell firmware about the heat circuit.
+#define CIRCUIT_CONF1_PIN   15  // Used to tell firmware about the heat circuit.
+
+
+/* SX8634 GPIO pins */
+#define LED_TOUCH_PIN        0
+#define LED_ERROR_PIN        1
+#define LED_FAN_PIN          2
+#define LED_PUMP_PIN         3
+#define LED_TEC_PIN          4
+#define VIBRATOR_PIN         7
 
 
 /*******************************************************************************

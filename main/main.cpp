@@ -9,6 +9,7 @@
 #include <SensorFilter.h>
 #include <ParsingConsole.h>
 #include <StopWatch.h>
+#include <Image/Image.h>
 #include <ManuvrLink/ManuvrLink.h>
 #include <cbor-cpp/cbor.h>
 #include <uuid.h>
@@ -100,6 +101,47 @@ const I2CAdapterOptions i2c1_opts(
   400000
 );
 
+/* Configuration for the display. */
+const SSD13xxOpts disp_opts(
+  ImgOrientation::ROTATION_0,
+  DISPLAY_RST_PIN,
+  DISPLAY_DC_PIN,
+  DISPLAY_CS_PIN,
+  SSDModel::SSD1331
+);
+
+const uint8_t sx1503_config[SX1503_SERIALIZE_SIZE] = {
+  0x01, SX1503_IRQ_PIN, 0xff, 0x00, 0x00,
+  0x00, 0x00,  // All inputs default to safe states after init.
+  0x0f, 0x00,  // 0-7 are outputs into a 5V domain. 8-11 are inputs. 12-15 are LEDs.
+  0x0F, 0x00,  // All inputs have pull-ups.
+  0x00, 0x00,  // No pull-downs.
+  0xF0, 0xFF,  // Interrupts unmasked for all inputs.
+  0x00, 0x00,  // All inputs are sensitive to both edges.
+  0xff, 0x00,  // All inputs are sensitive to both edges.
+  0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x04
+};
+
+BME280Settings baro_settings(
+  0x76,
+  BME280OSR::X1,
+  BME280OSR::X1,
+  BME280OSR::X1,
+  BME280Mode::Normal,
+  BME280StandbyTime::StandbyTime_1000ms,
+  BME280Filter::Off
+);
+
+/* Touch board */
+const SX8634Opts _touch_opts(
+  SX8634_DEFAULT_I2C_ADDR,  // i2c address
+  SX8634_RESET_PIN,         // Reset pin. Output. Active low.
+  SX8634_IRQ_PIN            // IRQ pin. Input. Active low. Needs pullup.
+);
+SX8634* touch = nullptr;
+
 
 ManuvrLinkOpts link_opts(
   100,   // ACK timeout is 100ms.
@@ -123,6 +165,9 @@ I2CAdapter i2c1(&i2c1_opts);
 
 /* This object will contain our direct-link via TCP. */
 ManuvrLink* m_link = nullptr;
+
+SX1503 sx1503(SX1503_IRQ_PIN, 255);   // GPIO on the power control board.
+SSD13xx display(&disp_opts);
 
 TMP102 temp_sensor_0(0x48, 255);
 TMP102 temp_sensor_1(0x49, 255);
@@ -549,6 +594,34 @@ void mqtt_send_temperature() {
 
 
 /*******************************************************************************
+* Touch callbacks
+*******************************************************************************/
+
+static void cb_button(int button, bool pressed) {
+  last_interaction = millis();
+  if (pressed) {
+    //vibrateOn(19);
+  }
+  //ledOn(LED_B_PIN, 2, (4095 - graph_array_ana_light.value() * 3000));
+  uint16_t value = touch->buttonStates();
+  last_interaction = millis();
+  //uApp::appActive()->deliverButtonValue(value);
+}
+
+
+static void cb_slider(int slider, int value) {
+  last_interaction = millis();
+  //ledOn(LED_R_PIN, 30, (4095 - graph_array_ana_light.value() * 3000));
+  //uApp::appActive()->deliverSliderValue(value);
+}
+
+
+static void cb_longpress(int button, uint32_t duration) {
+  //ledOn(LED_G_PIN, 30, (4095 - graph_array_ana_light.value() * 3000));
+}
+
+
+/*******************************************************************************
 * Console callbacks
 *******************************************************************************/
 
@@ -593,6 +666,37 @@ int callback_link_tools(StringBuilder* text_return, StringBuilder* args) {
   return ret;
 }
 
+
+int callback_touch_tools(StringBuilder* text_return, StringBuilder* args) {
+  int ret = -1;
+  char* cmd = args->position_trimmed(0);
+  if (0 < args->count()) {
+    ret = 0;
+    if (0 == StringBuilder::strcasecmp(cmd, "info")) {
+      touch->printDebug(text_return);
+    }
+    else if (0 == StringBuilder::strcasecmp(cmd, "poll")) {
+      text_return->concatf("SX8634 poll() returns %d.\n", touch->poll());
+    }
+    else if (0 == StringBuilder::strcasecmp(cmd, "init")) {
+      text_return->concatf("SX8634 init() returns %d.\n", touch->init());
+    }
+    else if (0 == StringBuilder::strcasecmp(cmd, "reset")) {
+      text_return->concatf("SX8634 reset() returns %d.\n", touch->reset());
+    }
+    else if (0 == StringBuilder::strcasecmp(cmd, "ping")) {
+      text_return->concatf("SX8634 ping() returns %d\n", touch->ping());
+    }
+    else if (0 == StringBuilder::strcasecmp(cmd, "mode")) {
+      if (1 < args->count()) {
+        int mode_int = args->position_as_int(1);
+        text_return->concatf("SX8634 setMode(%s) returns %d.\n", SX8634::getModeStr((SX8634OpMode) mode_int), touch->setMode((SX8634OpMode) mode_int));
+      }
+      text_return->concatf("SX8634 mode set to %s.\n", SX8634::getModeStr(touch->operationalMode()));
+    }
+  }
+  return ret;
+}
 
 
 int callback_i2c_tools(StringBuilder* text_return, StringBuilder* args) {
@@ -768,29 +872,35 @@ int callback_pump_tools(StringBuilder* text_return, StringBuilder* args) {
   if (0 == StringBuilder::strcasecmp(loop, "i")) {
     if (1 < args->count()) {
       if (0 == StringBuilder::strcasecmp(cmd, "on")) {
-        setPin(PUMP0_ENABLE_PIN, true);
-        text_return->concat("Pump enabled.\n");
+        if (0 == sx1503.digitalWrite(PUMP0_ENABLE_PIN, 1)) {
+          text_return->concatf("Pump %s enabled.\n", loop);
+        }
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "off")) {
-        setPin(PUMP0_ENABLE_PIN, false);
-        text_return->concat("Pump disabled.\n");
+        if (0 == sx1503.digitalWrite(PUMP0_ENABLE_PIN, 0)) {
+          text_return->concatf("Pump %s disabled.\n", loop);
+        }
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "filter")) {
         pump_speed_0.printFilter(text_return);
       }
       else print_pump0_speed = true;
     }
-    else print_pump0_speed = true;
+    else {
+      print_pump0_speed = true;
+    }
   }
   else if (0 == StringBuilder::strcasecmp(loop, "e")) {
     if (1 < args->count()) {
       if (0 == StringBuilder::strcasecmp(cmd, "on")) {
-        setPin(PUMP1_ENABLE_PIN, true);
-        text_return->concat("Pump enabled.\n");
+        if (0 == sx1503.digitalWrite(PUMP1_ENABLE_PIN, 1)) {
+          text_return->concatf("Pump %s enabled.\n", loop);
+        }
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "off")) {
-        setPin(PUMP1_ENABLE_PIN, false);
-        text_return->concat("Pump disabled.\n");
+        if (0 == sx1503.digitalWrite(PUMP1_ENABLE_PIN, 0)) {
+          text_return->concatf("Pump %s disabled.\n", loop);
+        }
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "filter")) {
         pump_speed_1.printFilter(text_return);
@@ -803,34 +913,56 @@ int callback_pump_tools(StringBuilder* text_return, StringBuilder* args) {
     text_return->concat("You must specify the pump for either the internal (i) or external (e) loop.\n");
     ret = -1;
   }
-  if (print_pump0_speed) text_return->concatf("Pump0 (Internal):  %d RPM\n", (int) pump_speed_0.value()*60);
-  if (print_pump1_speed) text_return->concatf("Pump1 (External):  %d RPM\n", (int) pump_speed_1.value()*60);
+  if (print_pump0_speed) text_return->concatf("Pump0 (Internal): %3sabled  %4d RPM\n", (sx1503.digitalRead(PUMP0_ENABLE_PIN) ? "En":"Dis"), (int) pump_speed_0.value()*60);
+  if (print_pump1_speed) text_return->concatf("Pump1 (External): %3sabled  %4d RPM\n", (sx1503.digitalRead(PUMP1_ENABLE_PIN) ? "En":"Dis"), (int) pump_speed_1.value()*60);
   return ret;
 }
 
 
 int callback_tec_tools(StringBuilder* text_return, StringBuilder* args) {
-  int   ret  = 0;
+  const uint16_t GPIO_VAL = sx1503.getPinValues();
+  const bool BANK_0_P       = (GPIO_VAL >> TEC_BANK0_P_PIN) & 0x01;
+  const bool BANK_1_P       = (GPIO_VAL >> TEC_BANK1_P_PIN) & 0x01;
+  const bool BANK_0_N       = (GPIO_VAL >> TEC_BANK0_N_PIN) & 0x01;
+  const bool BANK_1_N       = (GPIO_VAL >> TEC_BANK1_N_PIN) & 0x01;
+  const bool BANK_0_ENABLED = BANK_0_P ^ BANK_0_N;
+  const bool BANK_1_ENABLED = BANK_1_P ^ BANK_1_N;
+  const bool BANK_0_REVERSE = BANK_0_ENABLED & BANK_0_N;
+  const bool BANK_1_REVERSE = BANK_1_ENABLED & BANK_1_N;
+  bool print_bank_0 = false;
+  bool print_bank_1 = false;
+  int  ret = 0;
+
   int   bank = args->position_as_int(0);
   char* cmd  = args->position_trimmed(1);
   if (0 < args->count()) {
-    uint8_t bank_pin = TEC_BANK1_PIN;
+    uint8_t bank_pin   = TEC_BANK1_P_PIN;
+    uint8_t bank_pin_n = TEC_BANK1_N_PIN;
     switch (bank) {
       case 0:
-        bank_pin = TEC_BANK0_PIN;
+        bank_pin   = TEC_BANK0_P_PIN;
+        bank_pin_n = TEC_BANK0_N_PIN;
       case 1:
         if (1 < args->count()) {
           if (0 == StringBuilder::strcasecmp(cmd, "on")) {
-            setPin(bank_pin, true);
-            text_return->concatf("TEC bank %d enabled.\n", bank);
+            if (0 == sx1503.setPinValues((GPIO_VAL & ~(1 << bank_pin_n)) | (1 << bank_pin))) {
+              text_return->concatf("TEC bank %d enabled.\n", bank);
+            }
           }
           else if (0 == StringBuilder::strcasecmp(cmd, "off")) {
-            setPin(bank_pin, false);
-            text_return->concatf("TEC bank %d disabled.\n", bank);
+            if (0 == sx1503.setPinValues(GPIO_VAL & ~((1 << bank_pin_n) | (1 << bank_pin)))) {
+              text_return->concatf("TEC bank %d disabled.\n", bank);
+            }
+          }
+          else if (0 == StringBuilder::strcasecmp(cmd, "reverse")) {
+            if (0 == sx1503.setPinValues(GPIO_VAL & ~((1 << bank_pin) | (1 << bank_pin_n)))) {
+              text_return->concatf("TEC bank %d enabled in reverse.\n", bank);
+            }
           }
         }
         else {
-          // TDO: print bank states.
+          print_bank_0 = true;
+          print_bank_1 = true;
         }
         break;
       default:
@@ -838,6 +970,9 @@ int callback_tec_tools(StringBuilder* text_return, StringBuilder* args) {
         break;
     }
   }
+
+  if (print_bank_0) text_return->concatf("TEC Bank0: %3sabled  %s\n", (BANK_0_ENABLED ? "En":"Dis"), BANK_0_REVERSE ? "(Reversed)":"");
+  if (print_bank_1) text_return->concatf("TEC Bank1: %3sabled  %s\n", (BANK_1_ENABLED ? "En":"Dis"), BANK_1_REVERSE ? "(Reversed)":"");
   return ret;
 }
 
@@ -945,15 +1080,15 @@ int callback_console_tools(StringBuilder* text_return, StringBuilder* args) {
 *******************************************************************************/
 
 void manuvr_task(void* pvParameter) {
-  esp_mqtt_client_config_t mqtt_cfg;
-  memset((void*) &mqtt_cfg, 0, sizeof(mqtt_cfg));
-  mqtt_cfg.uri  = "mqtt://" EXAMPLE_SERVER_URL;
-  mqtt_cfg.port = 1883;
-  mqtt_cfg.event_handle = mqtt_event_handler;
+  //esp_mqtt_client_config_t mqtt_cfg;
+  //memset((void*) &mqtt_cfg, 0, sizeof(mqtt_cfg));
+  //mqtt_cfg.uri  = "mqtt://" EXAMPLE_SERVER_URL;
+  //mqtt_cfg.port = 1883;
+  //mqtt_cfg.event_handle = mqtt_event_handler;
   //mqtt_cfg.user_context = (void *)your_context
 
-  client = esp_mqtt_client_init(&mqtt_cfg);
-  esp_mqtt_client_start(client);
+  //client = esp_mqtt_client_init(&mqtt_cfg);
+  //esp_mqtt_client_start(client);
 
   while (1) {
     bool should_sleep = true;
@@ -963,19 +1098,28 @@ void manuvr_task(void* pvParameter) {
     while (0 < spi_bus.service_callback_queue()) {
       should_sleep = false;
     }
-    while (0 < i2c0.poll()) {
-      should_sleep = false;
-    }
-    while (0 < i2c1.poll()) {
-      should_sleep = false;
-    }
+    //while (0 < i2c0.poll()) {
+    //  should_sleep = false;
+    //}
+    //while (0 < i2c1.poll()) {
+    //  should_sleep = false;
+    //}
+
+    timeoutCheckVibLED();
+
+    if (touch->devFound()) {          touch->poll();           }
+    if (sx1503.devFound()) {          sx1503.poll();           }
+    //if (temp_sensor_0.devFound()) {   temp_sensor_0.poll();    }
+    //if (temp_sensor_1.devFound()) {   temp_sensor_1.poll();    }
+    //if (temp_sensor_2.devFound()) {   temp_sensor_2.poll();    }
+    //if (temp_sensor_3.devFound()) {   temp_sensor_3.poll();    }
 
     if (0 < console_uart.poll()) {
       should_sleep = false;
     }
 
     if (should_sleep) {
-      vTaskDelay(1);
+      vTaskDelay(10);
     }
   }
 }
@@ -1032,17 +1176,17 @@ void app_main() {
   pinMode(PUMP0_TACH_PIN, GPIOMode::INPUT_PULLUP);
   pinMode(PUMP1_TACH_PIN, GPIOMode::INPUT_PULLUP);
 
-  pinMode(TEC_BANK0_PIN,    GPIOMode::OUTPUT);
-  pinMode(TEC_BANK1_PIN,    GPIOMode::OUTPUT);
-  pinMode(PUMP0_ENABLE_PIN, GPIOMode::OUTPUT);
-  pinMode(PUMP1_ENABLE_PIN, GPIOMode::OUTPUT);
   pinMode(FAN_PWM_PIN,      GPIOMode::ANALOG_OUT);
+  analogWrite(FAN_PWM_PIN, 0.5f);
 
-  setPin(TEC_BANK0_PIN,    true);
-  setPin(TEC_BANK1_PIN,    true);
-  setPin(PUMP0_ENABLE_PIN, true);
-  setPin(PUMP1_ENABLE_PIN, true);
-  analogWrite(FAN_PWM_PIN, 0.0f);
+  //pinMode(TEC_BANK0_PIN,    GPIOMode::OUTPUT);
+  //pinMode(TEC_BANK1_PIN,    GPIOMode::OUTPUT);
+  //pinMode(PUMP0_ENABLE_PIN, GPIOMode::OUTPUT);
+  //pinMode(PUMP1_ENABLE_PIN, GPIOMode::OUTPUT);
+  // setPin(TEC_BANK0_PIN,    false);
+  // setPin(TEC_BANK1_PIN,    true);
+  // setPin(PUMP0_ENABLE_PIN, false);
+  // setPin(PUMP1_ENABLE_PIN, true);
 
   /* Start the console UART and attach it to the console. */
   console_uart.readCallback(&console);    // Attach the UART to console...
@@ -1057,6 +1201,7 @@ void app_main() {
   console.defineCommand("help",        '?', ParsingConsole::tcodes_str_1, "Prints help to console.", "", 0, callback_help);
   platform.configureConsole(&console);
   //console.defineCommand("disp",        'd', ParsingConsole::tcodes_uint_1, "Display test", "", 1, callback_display_test);
+  console.defineCommand("touch",       '\0', ParsingConsole::tcodes_str_4, "SX8634 tools", "", 0, callback_touch_tools);
   console.defineCommand("sensor",      's',  ParsingConsole::tcodes_str_4, "Sensor tools", "", 0, callback_sensor_tools);
   console.defineCommand("filter",      '\0', ParsingConsole::tcodes_str_3, "Sensor filter info.", "", 0, callback_sensor_filter_info);
   console.defineCommand("fan",         'f',  ParsingConsole::tcodes_str_3, "Fan tools", "", 0, callback_fan_tools);
@@ -1081,16 +1226,40 @@ void app_main() {
   i2c0.init();
   i2c1.init();
 
-  temp_sensor_0.init(&i2c0);
-  temp_sensor_1.init(&i2c0);
-  temp_sensor_2.init(&i2c0);
-  temp_sensor_3.init(&i2c0);
+  display.init(&spi_bus);
+
+  display.fill(0);
+  display.setTextColor(0xFFFF, 0);
+  display.setCursor(14, 0);
+  display.setTextSize(1);
+  display.writeString("Calor Sentinam");
+
+  sx1503.assignBusInstance(&i2c0);
+  if (0 == sx1503.unserialize(sx1503_config, SX1503_SERIALIZE_SIZE)) {
+    if (0 == sx1503.init()) {
+      console_uart.write("Power control GPIO initialized.\n");
+    }
+    else console_uart.write("Failed to init SX1503.\n");
+  }
+  else console_uart.write("Failed to configure SX1503.\n");
+
+  touch = new SX8634(&_touch_opts);
+  touch->assignBusInstance(&i2c0);
+  touch->setButtonFxn(cb_button);
+  touch->setSliderFxn(cb_slider);
+  touch->setLongpressFxn(cb_longpress);
+  touch->reset();
+
+  temp_sensor_0.init(&i2c1);
+  temp_sensor_1.init(&i2c1);
+  temp_sensor_2.init(&i2c1);
+  temp_sensor_3.init(&i2c1);
 
   setPinFxn(FAN0_TACH_PIN,  IRQCondition::FALLING, isr_fan0_tach_fxn);
-  setPinFxn(FAN1_TACH_PIN,  IRQCondition::FALLING, isr_fan1_tach_fxn);
-  setPinFxn(FAN2_TACH_PIN,  IRQCondition::FALLING, isr_fan2_tach_fxn);
-  setPinFxn(PUMP0_TACH_PIN, IRQCondition::FALLING, isr_pump0_tach_fxn);
-  setPinFxn(PUMP1_TACH_PIN, IRQCondition::FALLING, isr_pump1_tach_fxn);
+  //setPinFxn(FAN1_TACH_PIN,  IRQCondition::FALLING, isr_fan1_tach_fxn);
+  //setPinFxn(FAN2_TACH_PIN,  IRQCondition::FALLING, isr_fan2_tach_fxn);
+  //setPinFxn(PUMP0_TACH_PIN, IRQCondition::FALLING, isr_pump0_tach_fxn);
+  //setPinFxn(PUMP1_TACH_PIN, IRQCondition::FALLING, isr_pump1_tach_fxn);
 
   xTaskCreate(manuvr_task, "_manuvr", 32768, NULL, (tskIDLE_PRIORITY + 2), NULL);
   //xTaskCreate(&ota_task, "ota_task", 8192, NULL, 5, NULL);
