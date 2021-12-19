@@ -1,4 +1,4 @@
-#include "HeatPump.h"
+#include <SensorFilter.h>
 
 /*******************************************************************************
 * Globals
@@ -7,24 +7,21 @@
 *******************************************************************************/
 
 /* Data buffers for sensors. */
-SensorFilter<float> temperature_filter_0(256, FilteringStrategy::RAW);
-SensorFilter<float> temperature_filter_1(256, FilteringStrategy::RAW);
-SensorFilter<float> temperature_filter_2(256, FilteringStrategy::RAW);
-SensorFilter<float> temperature_filter_3(256, FilteringStrategy::RAW);
-SensorFilter<float> temperature_filter_4(256, FilteringStrategy::RAW);
-SensorFilter<float> temperature_filter_5(256, FilteringStrategy::RAW);
-SensorFilter<float> temperature_filter_6(256, FilteringStrategy::RAW);
-SensorFilter<float> temperature_filter_7(256, FilteringStrategy::RAW);
+SensorFilter<float> temperature_filter_m(96, FilteringStrategy::RAW);
+SensorFilter<float> temperature_filter_0(96, FilteringStrategy::RAW);
+SensorFilter<float> temperature_filter_1(96, FilteringStrategy::RAW);
+SensorFilter<float> temperature_filter_2(96, FilteringStrategy::RAW);
+SensorFilter<float> temperature_filter_3(96, FilteringStrategy::RAW);
 
-SensorFilter<float> current_filter_0(256, FilteringStrategy::RAW);
-SensorFilter<float> current_filter_1(256, FilteringStrategy::RAW);
-SensorFilter<float> current_filter_2(256, FilteringStrategy::RAW);
+SensorFilter<float> pressure_filter(96, FilteringStrategy::RAW);
+SensorFilter<float> humidity_filter(96, FilteringStrategy::RAW);
+SensorFilter<float> air_temp_filter(96, FilteringStrategy::RAW);
 
-SensorFilter<float> fan_speed_0(256, FilteringStrategy::RAW);
-SensorFilter<float> fan_speed_1(256, FilteringStrategy::RAW);
-SensorFilter<float> fan_speed_2(256, FilteringStrategy::RAW);
-SensorFilter<float> pump_speed_0(256, FilteringStrategy::RAW);
-SensorFilter<float> pump_speed_1(256, FilteringStrategy::RAW);
+SensorFilter<float> fan_speed_0(96, FilteringStrategy::RAW);
+SensorFilter<float> fan_speed_1(96, FilteringStrategy::RAW);
+SensorFilter<float> fan_speed_2(96, FilteringStrategy::RAW);
+SensorFilter<float> pump_speed_0(96, FilteringStrategy::RAW);
+SensorFilter<float> pump_speed_1(96, FilteringStrategy::RAW);
 
 
 /*
@@ -32,39 +29,33 @@ SensorFilter<float> pump_speed_1(256, FilteringStrategy::RAW);
 */
 int8_t init_sensor_memory() {
   int8_t ret = -1;
-  if (0 != temperature_filter_0.init()) {       return ret;   }
+  if (0 != temperature_filter_m.init()) {    return ret;   }
   ret--;
-  if (0 != temperature_filter_1.init()) {       return ret;   }
+  if (0 != temperature_filter_0.init()) {    return ret;   }
   ret--;
-  if (0 != temperature_filter_2.init()) {       return ret;   }
+  if (0 != temperature_filter_1.init()) {    return ret;   }
   ret--;
-  if (0 != temperature_filter_3.init()) {       return ret;   }
+  if (0 != temperature_filter_2.init()) {    return ret;   }
   ret--;
-  if (0 != temperature_filter_4.init()) {       return ret;   }
+  if (0 != temperature_filter_3.init()) {    return ret;   }
   ret--;
-  if (0 != temperature_filter_5.init()) {       return ret;   }
+
+  if (0 != pressure_filter.init()) {         return ret;   }
   ret--;
-  if (0 != temperature_filter_6.init()) {       return ret;   }
+  if (0 != humidity_filter.init()) {         return ret;   }
   ret--;
-  if (0 != temperature_filter_7.init()) {       return ret;   }
+  if (0 != air_temp_filter.init()) {         return ret;   }
 
   ret--;
-  if (0 != current_filter_0.init()) {       return ret;   }
+  if (0 != fan_speed_0.init()) {             return ret;   }
   ret--;
-  if (0 != current_filter_1.init()) {       return ret;   }
+  if (0 != fan_speed_1.init()) {             return ret;   }
   ret--;
-  if (0 != current_filter_2.init()) {       return ret;   }
-
+  if (0 != fan_speed_2.init()) {             return ret;   }
   ret--;
-  if (0 != fan_speed_0.init()) {       return ret;   }
+  if (0 != pump_speed_0.init()) {            return ret;   }
   ret--;
-  if (0 != fan_speed_1.init()) {       return ret;   }
-  ret--;
-  if (0 != fan_speed_2.init()) {       return ret;   }
-  ret--;
-  if (0 != pump_speed_0.init()) {      return ret;   }
-  ret--;
-  if (0 != pump_speed_1.init()) {      return ret;   }
+  if (0 != pump_speed_1.init()) {            return ret;   }
 
   return 0;
 }

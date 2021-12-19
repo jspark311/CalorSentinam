@@ -1,24 +1,11 @@
 #include <math.h>
 
-/* ManuvrDrivers */
-#include <ManuvrDrivers.h>
-
-/* CppPotpourri */
+/* ManuvrPlatform */
 #include <ESP32.h>
-#include <StringBuilder.h>
-#include <SensorFilter.h>
-#include <ParsingConsole.h>
-#include <StopWatch.h>
-#include <Image/Image.h>
-#include <ManuvrLink/ManuvrLink.h>
-#include <cbor-cpp/cbor.h>
-#include <uuid.h>
-#include <I2CAdapter.h>
-#include <SPIAdapter.h>
 
 /* Local includes */
 #include "HeatPump.h"
-#include "SensorGlue.h"
+#include "uApp.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,6 +50,10 @@ extern "C" {
 #include "lwip/netdb.h"
 #include "lwip/sys.h"
 
+#ifdef __cplusplus
+}
+#endif
+
 
 /* OTA parameters that probably ought to be imparted at provisioning. */
 #define EXAMPLE_SERVER_URL "ian-app.home.joshianlindsay.com"
@@ -103,7 +94,7 @@ const I2CAdapterOptions i2c1_opts(
 
 /* Configuration for the display. */
 const SSD13xxOpts disp_opts(
-  ImgOrientation::ROTATION_0,
+  ImgOrientation::ROTATION_180,
   DISPLAY_RST_PIN,
   DISPLAY_DC_PIN,
   DISPLAY_CS_PIN,
@@ -168,15 +159,12 @@ ManuvrLink* m_link = nullptr;
 
 SX1503 sx1503(SX1503_IRQ_PIN, 255);   // GPIO on the power control board.
 SSD13xx display(&disp_opts);
-
+BME280I2C baro(baro_settings);
+TMP102 temp_sensor_m(0x49, 255);
 TMP102 temp_sensor_0(0x48, 255);
 TMP102 temp_sensor_1(0x49, 255);
 TMP102 temp_sensor_2(0x4A, 255);
 TMP102 temp_sensor_3(0x4B, 255);
-//TMP102 temp_sensor_4(0x48, 255);
-//TMP102 temp_sensor_5(0x49, 255);
-//TMP102 temp_sensor_6(0x4A, 255);
-//TMP102 temp_sensor_7(0x4B, 255);
 
 /* Profiling data */
 StopWatch stopwatch_main_loop_time;
@@ -216,7 +204,7 @@ void isr_pump1_tach_fxn() {        pump1_tach_counter++;      }
 
 
 void update_tach_values() {
-  const uint32_t FAN_COUNT            = 3;
+  //const uint32_t FAN_COUNT            = 3;
   const uint32_t FAN_RPM_HYSTERESIS   = 60;
   const uint32_t FAN_PERCENTAGE_DELTA = 2;
   const uint32_t now = millis();
@@ -605,14 +593,14 @@ static void cb_button(int button, bool pressed) {
   //ledOn(LED_B_PIN, 2, (4095 - graph_array_ana_light.value() * 3000));
   uint16_t value = touch->buttonStates();
   last_interaction = millis();
-  //uApp::appActive()->deliverButtonValue(value);
+  uApp::appActive()->deliverButtonValue(value);
 }
 
 
 static void cb_slider(int slider, int value) {
   last_interaction = millis();
   //ledOn(LED_R_PIN, 30, (4095 - graph_array_ana_light.value() * 3000));
-  //uApp::appActive()->deliverSliderValue(value);
+  uApp::appActive()->deliverSliderValue(value);
 }
 
 
@@ -756,14 +744,12 @@ int callback_sensor_tools(StringBuilder* text_return, StringBuilder* args) {
     if (1 < args->count()) {
       int arg1 = args->position_as_int(1);
       switch (arg1) {
-        case 0:   temp_sensor_0.printDebug(text_return);    break;
-        case 1:   temp_sensor_1.printDebug(text_return);    break;
-        case 2:   temp_sensor_2.printDebug(text_return);    break;
-        case 3:   temp_sensor_3.printDebug(text_return);    break;
-        //case 4:   temp_sensor_4.printDebug(text_return);    break;
-        //case 5:   temp_sensor_5.printDebug(text_return);    break;
-        //case 6:   temp_sensor_6.printDebug(text_return);    break;
-        //case 7:   temp_sensor_7.printDebug(text_return);    break;
+        case 0:   baro.printDebug(text_return);             break;
+        case 1:   temp_sensor_m.printDebug(text_return);    break;
+        case 2:   temp_sensor_0.printDebug(text_return);    break;
+        case 3:   temp_sensor_1.printDebug(text_return);    break;
+        case 4:   temp_sensor_2.printDebug(text_return);    break;
+        case 5:   temp_sensor_3.printDebug(text_return);    break;
         default:
           break;
       }
@@ -783,14 +769,19 @@ int callback_sensor_filter_info(StringBuilder* text_return, StringBuilder* args)
     char* cmd  = args->position_trimmed(1);
     SensorFilter<float>* sel_sen = nullptr;
     switch (arg0) {
-      case 0:   sel_sen = &temperature_filter_0;    break;
-      case 1:   sel_sen = &temperature_filter_1;    break;
-      case 2:   sel_sen = &temperature_filter_2;    break;
-      case 3:   sel_sen = &temperature_filter_3;    break;
-      //case 4:   sel_sen = &temperature_filter_4;    break;
-      //case 5:   sel_sen = &temperature_filter_5;    break;
-      //case 6:   sel_sen = &temperature_filter_6;    break;
-      //case 7:   sel_sen = &temperature_filter_7;    break;
+      case 1:   sel_sen = &temperature_filter_m;    break;
+      case 2:   sel_sen = &temperature_filter_0;    break;
+      case 3:   sel_sen = &temperature_filter_1;    break;
+      case 4:   sel_sen = &temperature_filter_2;    break;
+      case 5:   sel_sen = &temperature_filter_3;    break;
+      //case 6:   sel_sen = &fan_speed_0;             break;
+      //case 7:   sel_sen = &fan_speed_1;             break;
+      //case 8:   sel_sen = &fan_speed_2;             break;
+      //case 8:   sel_sen = &pump_speed_0;            break;
+      //case 10:  sel_sen = &pump_speed_1;            break;
+      case 0:   sel_sen = &air_temp_filter;         break;    // TODO: ugly
+      case 11:  sel_sen = &pressure_filter;         break;    // TODO: ugly
+      case 12:  sel_sen = &humidity_filter;         break;    // TODO: ugly
       default:
         break;
     }
@@ -1074,6 +1065,10 @@ int callback_console_tools(StringBuilder* text_return, StringBuilder* args) {
 }
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /*******************************************************************************
 * Main function and threads                                                    *
@@ -1098,24 +1093,28 @@ void manuvr_task(void* pvParameter) {
     while (0 < spi_bus.service_callback_queue()) {
       should_sleep = false;
     }
-    //while (0 < i2c0.poll()) {
-    //  should_sleep = false;
-    //}
-    //while (0 < i2c1.poll()) {
-    //  should_sleep = false;
-    //}
 
     timeoutCheckVibLED();
 
     if (touch->devFound()) {          touch->poll();           }
     if (sx1503.devFound()) {          sx1503.poll();           }
+    //if (temp_sensor_m.devFound()) {   temp_sensor_m.poll();    }
     //if (temp_sensor_0.devFound()) {   temp_sensor_0.poll();    }
     //if (temp_sensor_1.devFound()) {   temp_sensor_1.poll();    }
     //if (temp_sensor_2.devFound()) {   temp_sensor_2.poll();    }
     //if (temp_sensor_3.devFound()) {   temp_sensor_3.poll();    }
 
+    uint32_t millis_now = millis();
+    if ((last_interaction + 100000) <= millis_now) {
+      // After 100 seconds, time-out the display.
+      if (&app_standby != uApp::appActive()) {
+        uApp::setAppActive(AppID::HOT_STANDBY);
+      }
+    }
+    uApp::appActive()->refresh();
+
     if (0 < console_uart.poll()) {
-      should_sleep = false;
+      //should_sleep = false;
     }
 
     if (should_sleep) {
@@ -1170,23 +1169,14 @@ void app_main() {
     }
     ESP_ERROR_CHECK(err);
 
+  // Top-level pin responsibilities.
   pinMode(FAN0_TACH_PIN,  GPIOMode::INPUT_PULLUP);
   pinMode(FAN1_TACH_PIN,  GPIOMode::INPUT_PULLUP);
   pinMode(FAN2_TACH_PIN,  GPIOMode::INPUT_PULLUP);
   pinMode(PUMP0_TACH_PIN, GPIOMode::INPUT_PULLUP);
   pinMode(PUMP1_TACH_PIN, GPIOMode::INPUT_PULLUP);
-
   pinMode(FAN_PWM_PIN,      GPIOMode::ANALOG_OUT);
   analogWrite(FAN_PWM_PIN, 0.5f);
-
-  //pinMode(TEC_BANK0_PIN,    GPIOMode::OUTPUT);
-  //pinMode(TEC_BANK1_PIN,    GPIOMode::OUTPUT);
-  //pinMode(PUMP0_ENABLE_PIN, GPIOMode::OUTPUT);
-  //pinMode(PUMP1_ENABLE_PIN, GPIOMode::OUTPUT);
-  // setPin(TEC_BANK0_PIN,    false);
-  // setPin(TEC_BANK1_PIN,    true);
-  // setPin(PUMP0_ENABLE_PIN, false);
-  // setPin(PUMP1_ENABLE_PIN, true);
 
   /* Start the console UART and attach it to the console. */
   console_uart.readCallback(&console);    // Attach the UART to console...
@@ -1226,41 +1216,38 @@ void app_main() {
   i2c0.init();
   i2c1.init();
 
-  display.init(&spi_bus);
-
-  display.fill(0);
-  display.setTextColor(0xFFFF, 0);
-  display.setCursor(14, 0);
-  display.setTextSize(1);
-  display.writeString("Calor Sentinam");
-
-  sx1503.assignBusInstance(&i2c0);
-  if (0 == sx1503.unserialize(sx1503_config, SX1503_SERIALIZE_SIZE)) {
-    if (0 == sx1503.init()) {
-      console_uart.write("Power control GPIO initialized.\n");
-    }
-    else console_uart.write("Failed to init SX1503.\n");
-  }
-  else console_uart.write("Failed to configure SX1503.\n");
-
   touch = new SX8634(&_touch_opts);
-  touch->assignBusInstance(&i2c0);
   touch->setButtonFxn(cb_button);
   touch->setSliderFxn(cb_slider);
   touch->setLongpressFxn(cb_longpress);
-  touch->reset();
 
-  temp_sensor_0.init(&i2c1);
-  temp_sensor_1.init(&i2c1);
-  temp_sensor_2.init(&i2c1);
-  temp_sensor_3.init(&i2c1);
+  // Assign i2c0 to devices attached to it.
+  touch->assignBusInstance(&i2c0);
+  sx1503.assignBusInstance(&i2c0);
+  temp_sensor_m.assignBusInstance(&i2c0);
 
-  setPinFxn(FAN0_TACH_PIN,  IRQCondition::FALLING, isr_fan0_tach_fxn);
+  // Assign i2c1 to devices attached to it.
+  baro.assignBusInstance(&i2c1);
+  temp_sensor_0.assignBusInstance(&i2c1);
+  temp_sensor_1.assignBusInstance(&i2c1);
+  temp_sensor_2.assignBusInstance(&i2c1);
+  temp_sensor_3.assignBusInstance(&i2c1);
+
+  // Do any device configuration that needs to be imparted from the top level.
+  if (0 != sx1503.unserialize(sx1503_config, SX1503_SERIALIZE_SIZE)) {
+    console_uart.write("Failed to unserialize SX1503 config.\n");
+  }
+
+  // Enable interrupts for pins.
+  //setPinFxn(FAN0_TACH_PIN,  IRQCondition::FALLING, isr_fan0_tach_fxn);
   //setPinFxn(FAN1_TACH_PIN,  IRQCondition::FALLING, isr_fan1_tach_fxn);
   //setPinFxn(FAN2_TACH_PIN,  IRQCondition::FALLING, isr_fan2_tach_fxn);
   //setPinFxn(PUMP0_TACH_PIN, IRQCondition::FALLING, isr_pump0_tach_fxn);
   //setPinFxn(PUMP1_TACH_PIN, IRQCondition::FALLING, isr_pump1_tach_fxn);
 
+  //touch->reset();
+
+  // Spawn worker threads, note the time, and terminate thread.
   xTaskCreate(manuvr_task, "_manuvr", 32768, NULL, (tskIDLE_PRIORITY + 2), NULL);
   //xTaskCreate(&ota_task, "ota_task", 8192, NULL, 5, NULL);
   config_time = millis();
