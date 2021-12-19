@@ -655,6 +655,31 @@ int callback_link_tools(StringBuilder* text_return, StringBuilder* args) {
 }
 
 
+int callback_active_app(StringBuilder* text_return, StringBuilder* args) {
+  if (0 < args->count()) {
+    int arg0 = args->position_as_int(0);
+    switch (arg0) {
+      case ((int) AppID::APP_SELECT):
+      case ((int) AppID::TOUCH_TEST):
+      case ((int) AppID::CONFIGURATOR):
+      case ((int) AppID::COMMS_TEST):
+      case ((int) AppID::CALORIMETER):
+      case ((int) AppID::HOT_STANDBY):
+      case ((int) AppID::SUSPEND):
+        uApp::setAppActive((AppID) arg0);
+        break;
+      default:
+        text_return->concatf("Unsupported app: %d\n", arg0);
+        return -1;
+    }
+  }
+  else {
+    uApp::appActive()->refresh();
+  }
+  return 0;
+}
+
+
 int callback_touch_tools(StringBuilder* text_return, StringBuilder* args) {
   int ret = -1;
   char* cmd = args->position_trimmed(0);
@@ -1114,12 +1139,13 @@ void manuvr_task(void* pvParameter) {
     uApp::appActive()->refresh();
 
     if (0 < console_uart.poll()) {
-      //should_sleep = false;
+      should_sleep = false;
     }
 
-    if (should_sleep) {
-      vTaskDelay(10);
-    }
+    //if (should_sleep) {
+      //sleep_ms(20);
+      platform.yieldThread();
+    //}
   }
 }
 
@@ -1191,6 +1217,7 @@ void app_main() {
   console.defineCommand("help",        '?', ParsingConsole::tcodes_str_1, "Prints help to console.", "", 0, callback_help);
   platform.configureConsole(&console);
   //console.defineCommand("disp",        'd', ParsingConsole::tcodes_uint_1, "Display test", "", 1, callback_display_test);
+  console.defineCommand("app",         'a', ParsingConsole::tcodes_uint_1, "Select active application.", "", 0, callback_active_app);
   console.defineCommand("touch",       '\0', ParsingConsole::tcodes_str_4, "SX8634 tools", "", 0, callback_touch_tools);
   console.defineCommand("sensor",      's',  ParsingConsole::tcodes_str_4, "Sensor tools", "", 0, callback_sensor_tools);
   console.defineCommand("filter",      '\0', ParsingConsole::tcodes_str_3, "Sensor filter info.", "", 0, callback_sensor_filter_info);
@@ -1248,7 +1275,7 @@ void app_main() {
   //touch->reset();
 
   // Spawn worker threads, note the time, and terminate thread.
-  xTaskCreate(manuvr_task, "_manuvr", 32768, NULL, (tskIDLE_PRIORITY + 2), NULL);
+  xTaskCreate(manuvr_task, "_manuvr", 32768, NULL, (tskIDLE_PRIORITY), NULL);
   //xTaskCreate(&ota_task, "ota_task", 8192, NULL, 5, NULL);
   config_time = millis();
 }

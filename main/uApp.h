@@ -24,10 +24,10 @@ enum class AppID : uint8_t {
   APP_SELECT   =  1,  // For choosing the app.
   TOUCH_TEST   =  2,  // For diagnostics of the touch pad.
   CONFIGURATOR =  3,  // For tuning all the things.
-  COMMS_TEST   =  6,  // Connecting to the outside world.
-  CALORIMETER  =  8,  // Calorimeter
-  HOT_STANDBY  = 10,  // Full operation with powered-down UI elements.
-  SUSPEND      = 11   // Minimal power without an obligatory reboot.
+  COMMS_TEST   =  4,  // Connecting to the outside world.
+  CALORIMETER  =  5,  // Calorimeter
+  HOT_STANDBY  =  6,  // Full operation with powered-down UI elements.
+  SUSPEND      =  7   // Minimal power without an obligatory reboot.
 };
 
 /* Application lifecycle state machine positions. */
