@@ -32,25 +32,28 @@
 * Pin definitions and hardware constants.
 *******************************************************************************/
 /* Platform pins */
-#define DISPLAY_RST_PIN      4   // OUTPUT
-#define DISPLAY_DC_PIN      12   // OUTPUT
-#define DISPLAY_CS_PIN      14   // OUTPUT
-#define FAN_PWM_PIN         15   // ANALOG_OUT
-#define SCL1_PIN            16   // Sensor service bus.
-#define SDA1_PIN            17   // Sensor service bus.
-#define SDA0_PIN            18   // Touch controller and PMU bus.
-#define SCL0_PIN            19   // Touch controller and PMU bus.
-#define SX8634_RESET_PIN    21   // OUTPUT
-#define SX8634_IRQ_PIN      22   // INPUT_PULLUP
-#define SX1503_IRQ_PIN      23   // INPUT_PULLUP
-#define SPICLK_PIN          25   // OUTPUT
-#define SPIMISO_PIN         26   // INPUT
-#define SPIMOSI_PIN         27   // OUTPUT
-#define FAN0_TACH_PIN       32   // INPUT_PULLUP
-#define FAN1_TACH_PIN       33   // INPUT_PULLUP
-#define FAN2_TACH_PIN       34   // INPUT_PULLUP
-#define PUMP0_TACH_PIN      35   // INPUT_PULLUP
-#define PUMP1_TACH_PIN      39   // INPUT_PULLUP
+#define SX1503_IRQ_PIN       4   // INPUT_PULLUP
+#define FAN_PWM_PIN          5   // ANALOG_OUT  (Outputs PWM at boot)
+#define SX8634_RESET_PIN    12   // OUTPUT  (Boot will fail if pulled high)
+#define DISPLAY_RST_PIN     13   // OUTPUT
+#define DISPLAY_DC_PIN      14   // OUTPUT  (Outputs PWM at boot)
+#define FAN1_TACH_PIN       16   // INPUT_PULLUP
+#define FAN0_TACH_PIN       17   // INPUT_PULLUP
+#define FAN2_TACH_PIN       18   // INPUT_PULLUP
+#define TEMP_ALERT_1_PIN    19   // INPUT_PULLUP
+#define TEMP_ALERT_0_PIN    21   // INPUT_PULLUP
+#define SDA1_PIN            22   // Sensor service bus.
+#define SCL1_PIN            23   // Sensor service bus.
+#define SDA0_PIN            25   // Touch and power board service.
+#define SCL0_PIN            26   // Touch and power board service.
+#define DISPLAY_CS_PIN      27   // OUTPUT
+#define SPIMOSI_PIN         32   // OUTPUT
+#define SPICLK_PIN          33   // OUTPUT
+#define PUMP0_TACH_PIN      34   // INPUT (Needs pullup)
+#define PUMP1_TACH_PIN      35   // INPUT (Needs pullup)
+#define SX8634_IRQ_PIN      36   // INPUT (Needs pullup)
+#define TEMP_M_ALERT_PIN    39   // INPUT (Needs pullup)
+
 
 
 /* SX1503 GPIO pins */
