@@ -180,18 +180,10 @@ StopWatch stopwatch_main_loop_time;
 uint32_t boot_time         = 0;      // millis() at boot.
 uint32_t config_time       = 0;      // millis() at end of setup().
 uint32_t last_interaction  = 0;      // millis() when the user last interacted.
+float    fan_pwm_ratio     = 0.0;
 
 volatile static uint32_t tach_counters[5] = {0, 0, 0, 0, 0};
 volatile static uint32_t last_tach_check  = 0;
-
-// static uint16_t fan0_target_rpm   = 200;
-// static uint16_t fan1_target_rpm   = 200;
-// static uint16_t fan2_target_rpm   = 200;
-// static uint8_t fan0_pwm_percent   = 100;
-// static uint8_t fan1_pwm_percent   = 100;
-// static uint8_t fan2_pwm_percent   = 100;
-
-static float    fan_pwm_ratio     = 0.0;
 
 
 
@@ -211,12 +203,14 @@ void update_tach_values() {
   const uint32_t ms_delta_tach = wrap_accounted_delta(last_tach_check, now);
   // Every second or so, update the tach values.
   if (ms_delta_tach >= 1000) {
+    //printf("update_tach_values(): %u  %u  %u  %u  %u\n", tach_counters[0], tach_counters[1], tach_counters[2], tach_counters[3], tach_counters[4]);
     for (uint i = 0; i < 5; i++) {  // We have five tachometer values to update.
       uint32_t tmp_tach_count  = tach_counters[i];
       tach_counters[i] -= tmp_tach_count;     // Decrement by the amount we noted.
-      // We want RPMs. We get two counts per full revolution, and we are dealing
+      // We want RPMs. We get two (four?) counts per full revolution, and we are dealing
       //   with sample periods in terms of milliseconds. Thus....
-      uint16_t tmp_tach_rpm = (uint16_t) (tmp_tach_count * (30000.0 / (float) ms_delta_tach));
+      uint16_t tmp_tach_rpm = (uint16_t) (tmp_tach_count * (15000.0 / (float) ms_delta_tach));
+      //printf("tmp_tach_rpm:   %u\n", tmp_tach_rpm);
       SensorFilter<uint16_t>* filter = nullptr;
       switch (i) {
         case TACH_IDX_FAN0:     filter = &fan_speed_0;     break;
@@ -990,9 +984,9 @@ int callback_fan_tools(StringBuilder* text_return, StringBuilder* args) {
     text_return->concatf("Fan speed set at %.2f%%\n", fan_pwm_ratio);
   }
   else {
-    text_return->concatf("Fan0:\t%d RPM\n", (int) fan_speed_0.value()*60);
-    text_return->concatf("Fan1:\t%d RPM\n", (int) fan_speed_1.value()*60);
-    text_return->concatf("Fan2:\t%d RPM\n", (int) fan_speed_2.value()*60);
+    text_return->concatf("Fan0:\t%d RPM\n", (int) fan_speed_0.value());
+    text_return->concatf("Fan1:\t%d RPM\n", (int) fan_speed_1.value());
+    text_return->concatf("Fan2:\t%d RPM\n", (int) fan_speed_2.value());
   }
   return ret;
 }
@@ -1386,8 +1380,8 @@ void app_main() {
 
   // Enable interrupts for pins.
   setPinFxn(FAN0_TACH_PIN,  IRQCondition::FALLING, isr_fan0_tach_fxn);
-  //setPinFxn(FAN1_TACH_PIN,  IRQCondition::FALLING, isr_fan1_tach_fxn);
-  //setPinFxn(FAN2_TACH_PIN,  IRQCondition::FALLING, isr_fan2_tach_fxn);
+  setPinFxn(FAN1_TACH_PIN,  IRQCondition::FALLING, isr_fan1_tach_fxn);
+  setPinFxn(FAN2_TACH_PIN,  IRQCondition::FALLING, isr_fan2_tach_fxn);
   //setPinFxn(PUMP0_TACH_PIN, IRQCondition::FALLING, isr_pump0_tach_fxn);
   //setPinFxn(PUMP1_TACH_PIN, IRQCondition::FALLING, isr_pump1_tach_fxn);
 
