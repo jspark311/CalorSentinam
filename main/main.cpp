@@ -101,7 +101,7 @@ const I2CAdapterOptions i2c1_opts(
 
 /* Configuration for the display. */
 const SSD13xxOpts disp_opts(
-  ImgOrientation::ROTATION_180,
+  ImgOrientation::ROTATION_0,
   DISPLAY_RST_PIN,
   DISPLAY_DC_PIN,
   DISPLAY_CS_PIN,
@@ -704,11 +704,6 @@ int callback_display_test(StringBuilder* text_return, StringBuilder* args) {
   }
   else {
     display.printDebug(text_return);
-    #ifdef SPI_HAS_TRANSFER_ASYNC
-      text_return->concat("SPI_HAS_TRANSFER_ASYNC is set.\n");
-    #else
-      text_return->concat("SPI_HAS_TRANSFER_ASYNC is NOT set.\n");
-    #endif
   }
 
   millis_1 = millis();
@@ -796,10 +791,9 @@ int callback_active_app(StringBuilder* text_return, StringBuilder* args) {
 
 
 int callback_touch_tools(StringBuilder* text_return, StringBuilder* args) {
-  int ret = -1;
+  int ret = 0;
   char* cmd = args->position_trimmed(0);
   if (0 < args->count()) {
-    ret = 0;
     if (0 == StringBuilder::strcasecmp(cmd, "info")) {
       touch->printDebug(text_return);
     }
@@ -822,7 +816,58 @@ int callback_touch_tools(StringBuilder* text_return, StringBuilder* args) {
       }
       text_return->concatf("SX8634 mode set to %s.\n", SX8634::getModeStr(touch->operationalMode()));
     }
+    else ret = -1;
   }
+  else ret = -1;
+
+  return ret;
+}
+
+
+int callback_spi_debug(StringBuilder* text_return, StringBuilder* args) {
+  int ret = 0;
+  if (0 < args->count()) {
+    int arg0 = args->position_as_int(0);
+    char* cmd = args->position_trimmed(1);
+    SPIAdapter* b_ptr = nullptr;
+    switch (arg0) {
+      case 1:
+        b_ptr = &spi_bus;
+        break;
+      default:
+        text_return->concatf("Unsupported adapter: %d\n", arg0);
+        break;
+    }
+    if (nullptr != b_ptr) {
+      if (0 == StringBuilder::strcasecmp(cmd, "poll")) {
+        text_return->concatf("SP%u advance_work_queue() returns: %d\n", arg0, b_ptr->advance_work_queue());
+        text_return->concatf("SP%u service_callback_queue() returns: %d\n", arg0, b_ptr->service_callback_queue());
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "queue")) {
+        uint8_t arg2 = (uint8_t) args->position_as_int(2);
+        spi_bus.printWorkQueue(text_return, strict_max((uint8_t) 3, arg2));
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "purge")) {
+        text_return->concatf("SPI%u purge_queued_work()\n", arg0);
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "ragepurge")) {
+        text_return->concatf("SPI%u purge_queued_work()\n", arg0);
+        text_return->concatf("SPI%u purge_current_job()\n", arg0);
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "verbosity")) {
+        if (2 < args->count()) {
+          uint8_t arg2 = (uint8_t) args->position_as_int(2);
+          b_ptr->setVerbosity(arg2);
+        }
+        text_return->concatf("Verbosity for SPI%u is %d\n", arg0, b_ptr->getVerbosity());
+      }
+      else {
+        b_ptr->printAdapter(text_return);
+      }
+    }
+  }
+  else ret = -1;
+
   return ret;
 }
 
@@ -1338,6 +1383,7 @@ void app_main() {
   console.defineCommand("pump",        'p',  ParsingConsole::tcodes_str_3, "Pump tools", "", 0, callback_pump_tools);
   console.defineCommand("tec",         't',  ParsingConsole::tcodes_str_3, "TEC tools", "", 0, callback_tec_tools);
   console.defineCommand("i2c",         '\0', ParsingConsole::tcodes_str_4, "I2C tools", "Usage: i2c <bus> <action> [addr]", 1, callback_i2c_tools);
+  console.defineCommand("spi",         '\0', ParsingConsole::tcodes_str_3, "SPI debug.", "", 1, callback_spi_debug);
   console.defineCommand("console",     '\0', ParsingConsole::tcodes_str_3, "Console conf.", "[echo|prompt|force|rxterm|txterm]", 0, callback_console_tools);
   console.defineCommand("link",        'l', ParsingConsole::tcodes_str_4, "Linked device tools.", "", 0, callback_link_tools);
   console.init();
@@ -1384,8 +1430,6 @@ void app_main() {
   setPinFxn(FAN2_TACH_PIN,  IRQCondition::FALLING, isr_fan2_tach_fxn);
   //setPinFxn(PUMP0_TACH_PIN, IRQCondition::FALLING, isr_pump0_tach_fxn);
   //setPinFxn(PUMP1_TACH_PIN, IRQCondition::FALLING, isr_pump1_tach_fxn);
-
-  touch->reset();   // TODO: Why must this be done twice?
 
   // Spawn worker threads, note the time, and terminate thread.
   xTaskCreate(manuvr_task, "_manuvr", 32768, NULL, (tskIDLE_PRIORITY), NULL);
