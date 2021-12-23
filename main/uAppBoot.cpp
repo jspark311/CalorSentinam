@@ -152,7 +152,7 @@ void uAppBoot::_redraw_window() {
         case UAPP_BOOT_FLAG_INIT_DISPLAY:
           FB->fill(BLACK);
           FB->setTextColor(WHITE, BLACK);
-          FB->setCursor(14, 0);
+          FB->setCursor(0, 0);
           FB->setTextSize(1);
           FB->writeString("Calor Sentinam");
           FB->setTextSize(0);

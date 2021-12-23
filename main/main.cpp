@@ -101,7 +101,7 @@ const I2CAdapterOptions i2c1_opts(
 
 /* Configuration for the display. */
 const SSD13xxOpts disp_opts(
-  ImgOrientation::ROTATION_0,
+  ImgOrientation::ROTATION_180,
   DISPLAY_RST_PIN,
   DISPLAY_DC_PIN,
   DISPLAY_CS_PIN,
@@ -803,6 +803,9 @@ int callback_touch_tools(StringBuilder* text_return, StringBuilder* args) {
     else if (0 == StringBuilder::strcasecmp(cmd, "init")) {
       text_return->concatf("SX8634 init() returns %d.\n", touch->init());
     }
+    else if (0 == StringBuilder::strcasecmp(cmd, "irq")) {
+      text_return->concatf("SX8634 read_irq_registers() returns %d.\n", touch->read_irq_registers());
+    }
     else if (0 == StringBuilder::strcasecmp(cmd, "reset")) {
       text_return->concatf("SX8634 reset() returns %d.\n", touch->reset());
     }
@@ -1281,11 +1284,18 @@ void manuvr_task(void* pvParameter) {
 
     if (touch->devFound()) {          touch->poll();           }
     if (sx1503.devFound()) {          sx1503.poll();           }
-    if (temp_sensor_m.devFound()) {   temp_sensor_m.poll();    }
-    if (temp_sensor_0.devFound()) {   temp_sensor_0.poll();    }
-    if (temp_sensor_1.devFound()) {   temp_sensor_1.poll();    }
-    if (temp_sensor_2.devFound()) {   temp_sensor_2.poll();    }
-    if (temp_sensor_3.devFound()) {   temp_sensor_3.poll();    }
+    if (baro.devFound()) {
+      if (0 < baro.poll()) {
+        humidity_filter.feedFilter(baro.hum());
+        air_temp_filter.feedFilter(baro.temp());
+        pressure_filter.feedFilter(baro.pres());
+      }
+    }
+    //if (temp_sensor_m.devFound()) {   temp_sensor_m.poll();    }
+    //if (temp_sensor_0.devFound()) {   temp_sensor_0.poll();    }
+    //if (temp_sensor_1.devFound()) {   temp_sensor_1.poll();    }
+    //if (temp_sensor_2.devFound()) {   temp_sensor_2.poll();    }
+    //if (temp_sensor_3.devFound()) {   temp_sensor_3.poll();    }
 
     uint32_t millis_now = millis();
     if ((last_interaction + 100000) <= millis_now) {
