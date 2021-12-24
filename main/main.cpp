@@ -61,20 +61,10 @@ extern "C" {
 //extern const uint8_t server_cert_pem_end[] asm("_binary_ca_cert_pem_end");
 
 
-#define TACH_IDX_FAN0     0
-#define TACH_IDX_FAN1     1
-#define TACH_IDX_FAN2     2
-#define TACH_IDX_PUMP0    3
-#define TACH_IDX_PUMP1    4
-
-
 /*******************************************************************************
 * Globals
 *******************************************************************************/
 
-// Our thermal flow model needs some parameters of the machine.
-const float MASS_OF_EXCHANGER        = 250.0;     // Grams
-const float MASS_OF_INTERNAL_COOLANT = 100.0;     // Grams
 
 esp_mqtt_client_handle_t client = nullptr;
 
@@ -176,14 +166,20 @@ TMP102 temp_sensor_3(0x4B, 255);
 /* Profiling data */
 StopWatch stopwatch_main_loop_time;
 
+/* User-provided operating parameters */
+HomeostasisParams homeostasis;
+
+
 /* Cheeseball async support stuff. */
 uint32_t boot_time         = 0;      // millis() at boot.
 uint32_t config_time       = 0;      // millis() at end of setup().
 uint32_t last_interaction  = 0;      // millis() when the user last interacted.
+uint32_t last_tach_check   = 0;      // millis() when the last tach check happened.
 float    fan_pwm_ratio     = 0.0;
 
+uint8_t  tach_fails[5]     = {0, 0, 0, 0, 0};    // Successive tachometer failures.
+
 volatile static uint32_t tach_counters[5] = {0, 0, 0, 0, 0};
-volatile static uint32_t last_tach_check  = 0;
 
 
 
@@ -198,11 +194,15 @@ void IRAM_ATTR isr_pump0_tach_fxn() {    tach_counters[TACH_IDX_PUMP0]++;   }
 void IRAM_ATTR isr_pump1_tach_fxn() {    tach_counters[TACH_IDX_PUMP1]++;   }
 
 
+/*******************************************************************************
+* Process functions called from the main service loop.
+*******************************************************************************/
+
 void update_tach_values() {
   const uint32_t now = millis();
   const uint32_t ms_delta_tach = wrap_accounted_delta(last_tach_check, now);
   // Every second or so, update the tach values.
-  if (ms_delta_tach >= 1000) {
+  if (ms_delta_tach >= homeostasis.period_tach_check) {
     //printf("update_tach_values(): %u  %u  %u  %u  %u\n", tach_counters[0], tach_counters[1], tach_counters[2], tach_counters[3], tach_counters[4]);
     for (uint i = 0; i < 5; i++) {  // We have five tachometer values to update.
       uint32_t tmp_tach_count  = tach_counters[i];
@@ -212,6 +212,7 @@ void update_tach_values() {
       uint16_t tmp_tach_rpm = (uint16_t) (tmp_tach_count * (15000.0 / (float) ms_delta_tach));
       //printf("tmp_tach_rpm:   %u\n", tmp_tach_rpm);
       SensorFilter<uint16_t>* filter = nullptr;
+      uint8_t tach_alert_threshold = 0;
       switch (i) {
         case TACH_IDX_FAN0:     filter = &fan_speed_0;     break;
         case TACH_IDX_FAN1:     filter = &fan_speed_1;     break;
@@ -220,43 +221,53 @@ void update_tach_values() {
         case TACH_IDX_PUMP1:    filter = &pump_speed_1;    break;
         default:  return;
       }
+      switch (i) {
+        case TACH_IDX_FAN0:
+        case TACH_IDX_FAN1:
+        case TACH_IDX_FAN2:
+          tach_alert_threshold = homeostasis.hysteresis_fan_alert;
+          break;
+        case TACH_IDX_PUMP0:
+        case TACH_IDX_PUMP1:
+          tach_alert_threshold = homeostasis.hysteresis_pump_alert;
+          break;
+      }
       filter->feedFilter(tmp_tach_rpm);
+      if (0 == tmp_tach_rpm) {
+        tach_fails[i]++;
+        if (tach_fails[i] >= tach_alert_threshold) {
+          // TODO: Freak out over a mechanical failure.
+        }
+      }
+      else {
+        tach_fails[i] = 0;
+      }
     }
     last_tach_check = now;
   }
-
-  // const uint32_t FAN_RPM_HYSTERESIS   = 60;
-  // const uint32_t FAN_PERCENTAGE_DELTA = 2;
-  // if (ms_delta_tach >= 1000) {
-  //   if (fan_speed_0.dirty()) {
-  //     const uint16_t FAN_THRESHOLD_SPEED_UP   = fan0_target_rpm + FAN_RPM_HYSTERESIS;
-  //     const uint16_t FAN_THRESHOLD_SPEED_DOWN = fan0_target_rpm - FAN_RPM_HYSTERESIS;   // TODO: magnitude check.
-  //     const uint16_t LAST_RPM_VALUE           = fan_speed_0.value();
-  //     if ((0 == LAST_RPM_VALUE) && (fan0_pwm_percent >= 100)) {   // Test for fan failure.
-  //     }
-  //     else if (LAST_RPM_VALUE < FAN_THRESHOLD_SPEED_UP) {    fan0_pwm_percent += FAN_PERCENTAGE_DELTA;   }
-  //     else if (LAST_RPM_VALUE > FAN_THRESHOLD_SPEED_DOWN) {  fan0_pwm_percent -= FAN_PERCENTAGE_DELTA;   }
-  //   }
-  //   if (fan_speed_1.dirty()) {
-  //     const uint16_t FAN_THRESHOLD_SPEED_UP   = fan1_target_rpm + FAN_RPM_HYSTERESIS;
-  //     const uint16_t FAN_THRESHOLD_SPEED_DOWN = fan1_target_rpm - FAN_RPM_HYSTERESIS;   // TODO: magnitude check.
-  //     const uint16_t LAST_RPM_VALUE           = fan_speed_1.value();
-  //     if ((0 == LAST_RPM_VALUE) && (fan1_pwm_percent >= 100)) {   // Test for fan failure.
-  //     }
-  //     else if (LAST_RPM_VALUE < FAN_THRESHOLD_SPEED_UP) {    fan1_pwm_percent += FAN_PERCENTAGE_DELTA;   }
-  //     else if (LAST_RPM_VALUE > FAN_THRESHOLD_SPEED_DOWN) {  fan1_pwm_percent -= FAN_PERCENTAGE_DELTA;   }
-  //   }
-  //   if (fan_speed_2.dirty()) {
-  //     const uint16_t FAN_THRESHOLD_SPEED_UP   = fan2_target_rpm + FAN_RPM_HYSTERESIS;
-  //     const uint16_t FAN_THRESHOLD_SPEED_DOWN = fan2_target_rpm - FAN_RPM_HYSTERESIS;   // TODO: magnitude check.
-  //     const uint16_t LAST_RPM_VALUE           = fan_speed_2.value();
-  //     if ((0 == LAST_RPM_VALUE) && (fan2_pwm_percent >= 100)) {   // Test for fan failure.
-  //     }
-  //     else if (LAST_RPM_VALUE < FAN_THRESHOLD_SPEED_UP) {    fan2_pwm_percent += FAN_PERCENTAGE_DELTA;   }
-  //     else if (LAST_RPM_VALUE > FAN_THRESHOLD_SPEED_DOWN) {  fan2_pwm_percent -= FAN_PERCENTAGE_DELTA;   }
-  //   }
-  // }
 }
+
+/*******************************************************************************
+* TODO: This block is pending mitosis
+*******************************************************************************/
+    void HomeostasisParams::printDebug(StringBuilder* output) {
+      output->concat("Current settings:\n");
+      output->concat("\tTemperatures:\n");
+      output->concatf("\t\tExternal loop (min/max):  (%.1fC / %.1fC)\n", temperature_min_internal_loop, temperature_max_internal_loop);
+      output->concatf("\t\tInternal loop (min/max):  (%.1fC / %.1fC)\n", temperature_min_internal_loop, temperature_max_internal_loop);
+      output->concatf("\t\tAir max:                  %.1fC\n", temperature_max_air);
+      output->concatf("\t\tH-Bridge max:             %.1fC\n", temperature_max_h_bridge);
+      output->concatf("\t\tExternal target:          %.1fC\n", temperature_target_external_loop);
+      output->concatf("\t\tInternal delta target:    %.1fC\n", temperature_delta_internal_loop);
+
+      output->concat("\n\tModel parameters:\n");
+      output->concatf("\t\tTach check period:        %u ms\n", period_tach_check);
+      output->concatf("\t\tFan adjust hysteresis:    %.1fC\n", hysteresis_fan_temperature);
+
+      output->concat("\n\tAlerting parameters:\n");
+      output->concatf("\t\tFan failure hysteresis:   %u checks\n", hysteresis_fan_alert);
+      output->concatf("\t\tPump failure hysteresis:  %u checks\n", hysteresis_pump_alert);
+    };
 
 
 /*******************************************************************************
@@ -609,6 +620,20 @@ static void cb_longpress(int button, uint32_t duration) {
 * Console callbacks
 *******************************************************************************/
 
+
+int callback_homeostasis_tool(StringBuilder* text_return, StringBuilder* args) {
+  int ret = 0;
+  char* cmd = args->position_trimmed(0);
+
+  if (0 == StringBuilder::strcasecmp(cmd, "init")) {
+  }
+  else {
+    homeostasis.printDebug(text_return);
+  }
+  return ret;
+}
+
+
 int callback_sx1503_test(StringBuilder* text_return, StringBuilder* args) {
   int ret = 0;
   char* cmd = args->position_trimmed(0);
@@ -670,6 +695,9 @@ int callback_sx1503_test(StringBuilder* text_return, StringBuilder* args) {
         }
         break;
     }
+  }
+  else if (0 == StringBuilder::strcasecmp(cmd, "refresh")) {
+    text_return->concatf("sx1503.refresh() returns %d\n", sx1503.refresh());
   }
   else if (0 == StringBuilder::strcasecmp(cmd, "regs")) {
     sx1503.printRegs(text_return);
@@ -1291,17 +1319,17 @@ void manuvr_task(void* pvParameter) {
         pressure_filter.feedFilter(baro.pres());
       }
     }
-    //if (temp_sensor_m.devFound()) {   temp_sensor_m.poll();    }
-    //if (temp_sensor_0.devFound()) {   temp_sensor_0.poll();    }
-    //if (temp_sensor_1.devFound()) {   temp_sensor_1.poll();    }
-    //if (temp_sensor_2.devFound()) {   temp_sensor_2.poll();    }
-    //if (temp_sensor_3.devFound()) {   temp_sensor_3.poll();    }
+    if (temp_sensor_m.devFound()) {   temp_sensor_m.poll();    }
+    if (temp_sensor_0.devFound()) {   temp_sensor_0.poll();    }
+    if (temp_sensor_1.devFound()) {   temp_sensor_1.poll();    }
+    if (temp_sensor_2.devFound()) {   temp_sensor_2.poll();    }
+    if (temp_sensor_3.devFound()) {   temp_sensor_3.poll();    }
 
     uint32_t millis_now = millis();
     if ((last_interaction + 100000) <= millis_now) {
       // After 100 seconds, time-out the display.
       if (&app_standby != uApp::appActive()) {
-        //uApp::setAppActive(AppID::HOT_STANDBY);
+        uApp::setAppActive(AppID::HOT_STANDBY);
       }
     }
     update_tach_values();
@@ -1383,9 +1411,11 @@ void app_main() {
 
   console.defineCommand("help",        '?', ParsingConsole::tcodes_str_1, "Prints help to console.", "", 0, callback_help);
   platform.configureConsole(&console);
+
+  console.defineCommand("homeostasis", 'h',  ParsingConsole::tcodes_str_4, "Homeostasis parameters", "", 0, callback_homeostasis_tool);
   console.defineCommand("sx",          '\0', ParsingConsole::tcodes_str_4, "SX1503 test", "", 0, callback_sx1503_test);
-  console.defineCommand("disp",        'd', ParsingConsole::tcodes_str_4, "Display test", "", 0, callback_display_test);
-  console.defineCommand("app",         'a', ParsingConsole::tcodes_str_4, "Select active application.", "", 0, callback_active_app);
+  console.defineCommand("disp",        'd',  ParsingConsole::tcodes_str_4, "Display test", "", 0, callback_display_test);
+  console.defineCommand("app",         'a',  ParsingConsole::tcodes_str_4, "Select active application.", "", 0, callback_active_app);
   console.defineCommand("touch",       '\0', ParsingConsole::tcodes_str_4, "SX8634 tools", "", 0, callback_touch_tools);
   console.defineCommand("sensor",      's',  ParsingConsole::tcodes_str_4, "Sensor tools", "", 0, callback_sensor_tools);
   console.defineCommand("filter",      '\0', ParsingConsole::tcodes_str_3, "Sensor filter info.", "", 0, callback_sensor_filter_info);
@@ -1395,7 +1425,7 @@ void app_main() {
   console.defineCommand("i2c",         '\0', ParsingConsole::tcodes_str_4, "I2C tools", "Usage: i2c <bus> <action> [addr]", 1, callback_i2c_tools);
   console.defineCommand("spi",         '\0', ParsingConsole::tcodes_str_3, "SPI debug.", "", 1, callback_spi_debug);
   console.defineCommand("console",     '\0', ParsingConsole::tcodes_str_3, "Console conf.", "[echo|prompt|force|rxterm|txterm]", 0, callback_console_tools);
-  console.defineCommand("link",        'l', ParsingConsole::tcodes_str_4, "Linked device tools.", "", 0, callback_link_tools);
+  console.defineCommand("link",        'l',  ParsingConsole::tcodes_str_4, "Linked device tools.", "", 0, callback_link_tools);
   console.init();
 
   StringBuilder ptc("HeatPump ");

@@ -87,6 +87,31 @@
 #define VIBRATOR_PIN         7
 
 
+/* Our thermal flow model needs some parameters of the machine. */
+#define MASS_OF_EXCHANGER         250.0f     // Grams
+#define MASS_OF_INTERNAL_COOLANT  100.0f     // Grams
+
+
+/*******************************************************************************
+* Invariant software parameters
+*******************************************************************************/
+// Indicies for tachometer arrays.
+#define TACH_IDX_FAN0     0
+#define TACH_IDX_FAN1     1
+#define TACH_IDX_FAN2     2
+#define TACH_IDX_PUMP0    3
+#define TACH_IDX_PUMP1    4
+
+#define RELAY_IDX_TEC_SUPPLY         0   // The first relay is the TEC supply.
+
+// What are the fans rated for?
+#define RPM_RADIATOR_FAN0_RATING  1700   // What are the fans rated for?
+#define RPM_RADIATOR_FAN1_RATING  1700   // What are the fans rated for?
+#define RPM_RADIATOR_FAN2_RATING  1700   // What are the fans rated for?
+#define RPM_PUMP0_RATING          1000   // What are the pumps rated for?
+#define RPM_PUMP1_RATING          1000   // What are the pumps rated for?
+
+
 
 /*******************************************************************************
 * Application color scheme (16-bit)
@@ -139,6 +164,44 @@ enum class DataVis : uint8_t {
   SCHEMATIC,  // A schematic render.
   FIELD,      // A 2d array.
   TEXT        // Prefer alphanumeric readout.
+};
+
+
+/*
+* Homeostatic parameters. All temperatures are in Celcius.
+*/
+class HomeostasisParams {
+  public:
+    // Limiting factor for maximums is the working range of the semiconductors under
+    //   instrumentation
+    // Exceeding these limits will cause the firmware to shut down the power and
+    //   raise an alarm.
+    float  temperature_max_external_loop = 80.0;   // Limiting factor: TEC
+    float  temperature_max_internal_loop = 80.0;   // Limiting factor: TEC
+    float  temperature_max_h_bridge      = 90.0;   // Limiting factor: MOSFETs forming the H-bridges.
+    float  temperature_max_air           = 50.0;   // Limiting factor: Temperature of the air in the case.
+
+    // Limiting factor for maximums is the freezing point of the working fluid in
+    //   the given loop. Unless the CONF switches reflect otherwise, that fluid is
+    //   presumed to be distilled water. If porpylene glycol, or some other
+    //   low-temperature fluid is used, the switch must be set to allow the minimums
+    //   to be reduced below the default.
+    // Exceeding these limits will cause the firmware to reverse-bias the TECs to
+    //   warm the working fluid. If this fails, the firmware will raise an alarm.
+    float  temperature_min_external_loop = 5.0;
+    float  temperature_min_internal_loop = 5.0;
+
+    // These are the user-defined paramters that set the target temperatures and
+    //   thresholds for the loops.
+    float  temperature_target_external_loop = 10.0;   // Try to maintain external loop at 10C.
+    float  temperature_delta_internal_loop  = 20.0;   // Try to maintain a 20C delta.
+
+    uint32_t period_tach_check          = 1000;     // In milliseconds.
+    float    hysteresis_fan_temperature = 2.0;      // How far deviant from the internal delta target before fans are adjusted?
+    uint8_t  hysteresis_fan_alert       = 4;        // How many successive 0-RPM samples before alert?
+    uint8_t  hysteresis_pump_alert      = 4;        // How many successive 0-RPM samples before alert?
+
+    void printDebug(StringBuilder*);
 };
 
 

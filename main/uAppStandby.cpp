@@ -4,11 +4,7 @@
 #include "HeatPump.h"
 
 
-extern SSD13xx display;
-
-
 uAppStandby::uAppStandby() : uApp("Standby", (Image*) &display) {}
-
 
 uAppStandby::~uAppStandby() {}
 

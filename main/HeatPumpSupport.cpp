@@ -489,6 +489,46 @@ void draw_data_square_field(
 
 
 /*
+* Draw the given data as a plane.
+*/
+void draw_thermal_loop_status_bug(
+  int x, int y, int w, int h,
+  uint32_t flags,
+  uint16_t pump_rpm,
+  bool tec_enabled,
+  bool tec_reversed,
+  SensorFilter<float>* filt
+) {
+  int origin_x = x + (w >> 1);
+  int origin_y = y + (h >> 1);
+  int maximal_extent = (strict_min((int16_t) w, (int16_t) h) >> 1) - 1;
+  float current_temperature = filt->value();
+  const int NEEDLE_WIDTH = maximal_extent >> 3;
+  StringBuilder temp_str;
+  display.fillCircle(origin_x, origin_y, maximal_extent, BLACK);
+  display.drawCircle(origin_x, origin_y, maximal_extent, WHITE);
+
+    // TODO: Draw temperature in the center of the bug.
+    // If we have space to do so, and the application requested it, draw the
+    //   progress value in the middle of the bar.
+    int txt_x = origin_x;
+    // If there is not space under the line, draw above it.
+    int txt_y = origin_y;
+
+    temp_str.concatf("%.2fC%", current_temperature);
+    display.setTextSize(0);
+    display.setCursor(txt_x, txt_y);
+    display.setTextColor(WHITE);
+    display.writeString((char*) temp_str.string());
+  // TODO: If the pump RPM is not zero, do a simple animation of the flow.
+  // Scale the RPM and rationalize it against the max frame rate and animation frames.
+  // Optionally: Show a deviation from target meter/value.
+  // Optionally: Show a visual scaled indication of min/max bounds.
+}
+
+
+
+/*
 * Draw the data view selector widget.
 */
 void draw_data_view_selector(
