@@ -74,8 +74,8 @@
 #define DEBUG_LED_3_PIN     11  // Status output
 #define RESERVED_IN_0_PIN   12  //
 #define RESERVED_IN_1_PIN   13  //
-#define CIRCUIT_CONF0_PIN   14  // Used to tell firmware about the heat circuit.
-#define CIRCUIT_CONF1_PIN   15  // Used to tell firmware about the heat circuit.
+#define CIRCUIT_CONF1_PIN   14  // Used to tell firmware about the heat circuit.
+#define CIRCUIT_CONF2_PIN   15  // Used to tell firmware about the heat circuit.
 
 
 /* SX8634 GPIO pins */
@@ -201,6 +201,9 @@ class HomeostasisParams {
     uint8_t  hysteresis_fan_alert       = 4;        // How many successive 0-RPM samples before alert?
     uint8_t  hysteresis_pump_alert      = 4;        // How many successive 0-RPM samples before alert?
 
+    bool     conf_sw1_enable_subzero    = false;    // The external loop has a fluid that freezes below 0C.
+    bool     conf_sw2_staged_tec_banks  = false;    // The TEC banks are configured for maximum delta.
+
     void printDebug(StringBuilder*);
 };
 
@@ -231,6 +234,8 @@ extern TMP102 temp_sensor_3;
 *******************************************************************************/
 
 extern ManuvrLink* m_link;
+
+extern HomeostasisParams homeostasis;
 
 /* SensorFilters. These are the memory hogs. */
 extern SensorFilter<float> temperature_filter_m;

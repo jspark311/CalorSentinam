@@ -161,28 +161,44 @@ void uAppBoot::_redraw_window() {
           ret_local = true;
           break;
         case UAPP_BOOT_FLAG_INIT_SX1503:
-          ret_local = (0 == sx1503.init());
+          if (sx1503.getAdapter()->busIdle()) {
+            ret_local = (0 == sx1503.init());
+          }
           break;
         case UAPP_BOOT_FLAG_INIT_TEMP_MOSFET:
-          ret_local = (0 == temp_sensor_m.init());
+          if (temp_sensor_m.getAdapter()->busIdle()) {
+            ret_local = (0 == temp_sensor_m.init());
+          }
           break;
         case UAPP_BOOT_FLAG_INIT_BARO:
-          ret_local = (0 == baro.init());
+          if (baro.getAdapter()->busIdle()) {
+            ret_local = (0 == baro.init());
+          }
           break;
         case UAPP_BOOT_FLAG_INIT_TEMP_XCHANGE_0:
-          ret_local = (0 == temp_sensor_0.init());
+          if (temp_sensor_0.getAdapter()->busIdle()) {
+            ret_local = (0 == temp_sensor_0.init());
+          }
           break;
         case UAPP_BOOT_FLAG_INIT_TEMP_XCHANGE_1:
-          ret_local = (0 == temp_sensor_1.init());
+          if (temp_sensor_1.getAdapter()->busIdle()) {
+            ret_local = (0 == temp_sensor_1.init());
+          }
           break;
         case UAPP_BOOT_FLAG_INIT_TEMP_XCHANGE_2:
-          ret_local = (0 == temp_sensor_2.init());
+          if (temp_sensor_2.getAdapter()->busIdle()) {
+            ret_local = (0 == temp_sensor_2.init());
+          }
           break;
         case UAPP_BOOT_FLAG_INIT_TEMP_XCHANGE_3:
-          ret_local = (0 == temp_sensor_3.init());
+          if (temp_sensor_3.getAdapter()->busIdle()) {
+            ret_local = (0 == temp_sensor_3.init());
+          }
           break;
         case UAPP_BOOT_FLAG_INIT_TOUCH:
-          ret_local = (0 == touch->reset());
+          //if (touch->getAdapter()->busIdle()) {
+            ret_local = (0 == touch->reset());
+          //}
           break;
         case UAPP_BOOT_FLAG_INIT_WIRELESS:
           ret_local = true;
@@ -222,7 +238,7 @@ void uAppBoot::_redraw_window() {
           ret_local = true;
           break;
         case UAPP_BOOT_FLAG_INIT_SX1503:
-          ret_local = sx1503.devFound();
+          ret_local = sx1503.initialized();
           break;
         case UAPP_BOOT_FLAG_INIT_TEMP_MOSFET:
           ret_local = temp_sensor_m.initialized();
@@ -244,11 +260,11 @@ void uAppBoot::_redraw_window() {
           break;
         case UAPP_BOOT_FLAG_INIT_TOUCH:
           if (touch->devFound()) {
-            touch->poll();
-            ret_local = touch->deviceReady();
-            if (ret_local) {
+            if (touch->deviceReady()) {
               touch->setLongpress(800, 0);   // 800ms is a long-press. No rep.
               touch->setMode(SX8634OpMode::ACTIVE);
+              ret_local = true;
+              //ret_local = (0 == touch->setMode(SX8634OpMode::ACTIVE));
             }
           }
           break;
@@ -256,7 +272,11 @@ void uAppBoot::_redraw_window() {
           ret_local = true;
           break;
         case UAPP_BOOT_FLAG_INIT_LOOP_CONFIG:
-          ret_local = true;
+          if (sx1503.initialized()) {
+            homeostasis.conf_sw1_enable_subzero    = !sx1503.digitalRead(CIRCUIT_CONF1_PIN);
+            homeostasis.conf_sw2_staged_tec_banks  = !sx1503.digitalRead(CIRCUIT_CONF2_PIN);
+            ret_local = true;
+          }
           break;
         case UAPP_BOOT_FLAG_INIT_STORAGE:
           ret_local = true;

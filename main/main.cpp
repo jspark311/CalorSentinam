@@ -89,6 +89,47 @@ const I2CAdapterOptions i2c1_opts(
   400000
 );
 
+const TMP102Opts temp_m_opts(
+  0x49,             // i2c address
+  TEMP_M_ALERT_PIN, // ALERT pin
+  true,             // Extended mode
+  true,             // Alert is active-low
+  TMP102DataRate::RATE_4_HZ
+);
+
+const TMP102Opts temp_0_opts(
+  0x48,             // i2c address
+  TEMP_ALERT_0_PIN, // ALERT pin
+  true,             // Extended mode
+  true,             // Alert is active-low
+  TMP102DataRate::RATE_4_HZ
+);
+
+const TMP102Opts temp_1_opts(
+  0x49,             // i2c address
+  255,              // ALERT pin
+  true,             // Extended mode
+  true,             // Alert is active-low
+  TMP102DataRate::RATE_4_HZ
+);
+
+const TMP102Opts temp_2_opts(
+  0x4A,             // i2c address
+  TEMP_ALERT_1_PIN, // ALERT pin
+  true,             // Extended mode
+  true,             // Alert is active-low
+  TMP102DataRate::RATE_4_HZ
+);
+
+const TMP102Opts temp_3_opts(
+  0x4B,             // i2c address
+  255,              // ALERT pin
+  true,             // Extended mode
+  true,             // Alert is active-low
+  TMP102DataRate::RATE_4_HZ
+);
+
+
 /* Configuration for the display. */
 const SSD13xxOpts disp_opts(
   ImgOrientation::ROTATION_180,
@@ -101,12 +142,12 @@ const SSD13xxOpts disp_opts(
 const uint8_t sx1503_config[SX1503_SERIALIZE_SIZE] = {
   0x01, SX1503_IRQ_PIN, 0xff, 0x00, 0x00,
   0x00, 0x00,  // All inputs default to safe states after init.
-  0x0f, 0x00,  // 0-7 are outputs into a 5V domain. 8-11 are inputs. 12-15 are LEDs.
-  0x0F, 0x00,  // All inputs have pull-ups.
+  0xF0, 0x00,  // 0-7 are outputs into a 5V domain. 8-11 are debugging LEDs. 12-15 are INPU_PULLUP.
+  0xF0, 0x00,  // All inputs have pull-ups.
   0x00, 0x00,  // No pull-downs.
-  0xF0, 0xFF,  // Interrupts unmasked for all inputs.
+  0x0F, 0xFF,  // Interrupts unmasked for all inputs.
+  0xFF, 0x00,  // All inputs are sensitive to both edges.
   0x00, 0x00,  // All inputs are sensitive to both edges.
-  0xff, 0x00,  // All inputs are sensitive to both edges.
   0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x04
@@ -154,14 +195,14 @@ I2CAdapter i2c1(&i2c1_opts);
 /* This object will contain our direct-link via TCP. */
 ManuvrLink* m_link = nullptr;
 
-SX1503 sx1503(SX1503_IRQ_PIN, 255);   // GPIO on the power control board.
+SX1503 sx1503(sx1503_config, SX1503_SERIALIZE_SIZE);   // GPIO on the power control board.
 SSD13xx display(&disp_opts);
 BME280I2C baro(baro_settings);
-TMP102 temp_sensor_m(0x49, 255);
-TMP102 temp_sensor_0(0x48, 255);
-TMP102 temp_sensor_1(0x49, 255);
-TMP102 temp_sensor_2(0x4A, 255);
-TMP102 temp_sensor_3(0x4B, 255);
+TMP102 temp_sensor_m(&temp_m_opts);
+TMP102 temp_sensor_0(&temp_0_opts);
+TMP102 temp_sensor_1(&temp_1_opts);
+TMP102 temp_sensor_2(&temp_2_opts);
+TMP102 temp_sensor_3(&temp_3_opts);
 
 /* Profiling data */
 StopWatch stopwatch_main_loop_time;
@@ -267,6 +308,10 @@ void update_tach_values() {
       output->concat("\n\tAlerting parameters:\n");
       output->concatf("\t\tFan failure hysteresis:   %u checks\n", hysteresis_fan_alert);
       output->concatf("\t\tPump failure hysteresis:  %u checks\n", hysteresis_pump_alert);
+
+      output->concat("\n\tHeat circuit conf switches:\n");
+      output->concatf("\t\tAllow sub-zero temps:     %c\n", conf_sw1_enable_subzero   ? 'y' : 'n');
+      output->concatf("\t\tTEC banks staged:         %c\n", conf_sw2_staged_tec_banks ? 'y' : 'n');
     };
 
 
@@ -297,6 +342,22 @@ void link_callback_message(uint32_t tag, ManuvrMsg* msg) {
 }
 
 
+/*******************************************************************************
+* SX1503 callbacks
+*******************************************************************************/
+
+void sx1503_callback_fxn(uint8_t pin, uint8_t level) {
+  switch (pin) {
+    case CIRCUIT_CONF1_PIN:
+      homeostasis.conf_sw1_enable_subzero = (0 == level);
+      break;
+    case CIRCUIT_CONF2_PIN:
+      homeostasis.conf_sw2_staged_tec_banks  = (0 == level);
+      break;
+    default:
+      break;
+  }
+}
 
 
 /*******************************************************************************
@@ -642,6 +703,10 @@ int callback_sx1503_test(StringBuilder* text_return, StringBuilder* args) {
 
   if (0 == StringBuilder::strcasecmp(cmd, "init")) {
     text_return->concatf("sx1503.init() returns %d\n", sx1503.init());
+  }
+  else if (0 == StringBuilder::strcasecmp(cmd, "reconf")) {
+    int8_t ret_local = sx1503.unserialize(sx1503_config, SX1503_SERIALIZE_SIZE);
+    text_return->concatf("sx1503 reconf returns %d\n", ret_local);
   }
   else if (0 == StringBuilder::strcasecmp(cmd, "reset")) {
     text_return->concatf("sx1503.reset() returns %d\n", sx1503.reset());
@@ -1443,9 +1508,6 @@ void app_main() {
   i2c1.init();
 
   touch = new SX8634(&_touch_opts);
-  touch->setButtonFxn(cb_button);
-  touch->setSliderFxn(cb_slider);
-  touch->setLongpressFxn(cb_longpress);
 
   // Assign i2c0 to devices attached to it.
   touch->assignBusInstance(&i2c0);
@@ -1459,10 +1521,13 @@ void app_main() {
   temp_sensor_2.assignBusInstance(&i2c1);
   temp_sensor_3.assignBusInstance(&i2c1);
 
-  // Do any device configuration that needs to be imparted from the top level.
-  if (0 != sx1503.unserialize(sx1503_config, SX1503_SERIALIZE_SIZE)) {
-    console_uart.write("Failed to unserialize SX1503 config.\n");
-  }
+  // Callback setup for various drivers...
+  touch->setButtonFxn(cb_button);
+  touch->setSliderFxn(cb_slider);
+  touch->setLongpressFxn(cb_longpress);
+
+  sx1503.attachInterrupt(CIRCUIT_CONF1_PIN, sx1503_callback_fxn, IRQCondition::CHANGE);
+  sx1503.attachInterrupt(CIRCUIT_CONF2_PIN, sx1503_callback_fxn, IRQCondition::CHANGE);
 
   // Enable interrupts for pins.
   setPinFxn(FAN0_TACH_PIN,  IRQCondition::FALLING, isr_fan0_tach_fxn);
