@@ -414,7 +414,7 @@ int8_t tec_safety(bool en) {
     // The safety being on is incompatible with the safety relay being driven.
     if (en == sx1503.digitalRead(TEC_HV_ENABLE_PIN)) {
       ret--;
-      if (en & (tec_powered(0) | tec_powered(1))) {
+      if ((!en) & (tec_powered(0) | tec_powered(1))) {
         ret--;
       }
       // Set the drive pin HIGH to apply voltage the the H-bridge. LOW to remove it.
