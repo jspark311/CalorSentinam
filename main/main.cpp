@@ -406,17 +406,23 @@ void sx1503_callback_fxn(uint8_t pin, uint8_t level) {
 * @return 0 on success (which includes "no action")
 *        -1 on GPIO unreadiness
 *        -2 on I/O failure
+*        -3 on premature bank enablement
 */
 int8_t tec_safety(bool en) {
   int8_t ret = -1;
   if (sx1503.initialized()) {
-    ret--;
-    if (en != sx1503.digitalRead(TEC_HV_ENABLE_PIN)) {
+    // The safety being on is incompatible with the safety relay being driven.
+    if (en == sx1503.digitalRead(TEC_HV_ENABLE_PIN)) {
+      ret--;
+      if (en & (tec_powered(0) | tec_powered(1))) {
+        ret--;
+      }
       // Set the drive pin HIGH to apply voltage the the H-bridge. LOW to remove it.
-      if (0 == sx1503.digitalWrite(TEC_HV_ENABLE_PIN, !en)) {
+      else if (0 == sx1503.digitalWrite(TEC_HV_ENABLE_PIN, !en)) {
         ret = 0;
       }
     }
+    else ret = 0;  // TEC safety relay is already in the desired state.
   }
   return ret;
 }
@@ -567,7 +573,7 @@ int8_t tec_reversed(const uint8_t BANK_ID, bool rev) {
 
 
 bool tec_safety() {
-  bool ret = false;
+  bool ret = true;   // Hardware assurances make this safe to say.
   if (sx1503.initialized()) {
     // If the drive pin is LOW, the relay is off, and thus, the TECs are safetied.
     ret = (0 == sx1503.digitalRead(TEC_HV_ENABLE_PIN));
@@ -1495,9 +1501,19 @@ int callback_tec_tools(StringBuilder* text_return, StringBuilder* args) {
         bool crev = (2 < args->count()) ? (0 != args->position_as_int(2)) : !tec_reversed(bank);
         text_return->concatf("tec_reversed(%u, %s) returns %d.\n", bank, (crev?"true":"false"), tec_reversed(bank, crev));
       }
+      else if (0 == StringBuilder::strcasecmp(cmd, "safety")) {
+        if (2 < args->count()) {
+          bool safety = (0 != args->position_as_int(2));
+          text_return->concatf("tec_safety(%s) returns %d.\n", (safety?"true":"false"), tec_safety(safety));
+        }
+        else {
+          text_return->concatf("TEC safety is %s.\n", (tec_safety()?"on":"off"));
+        }
+      }
       else ret = -1;
     }
     else {
+      text_return->concatf("TEC safety is %s.\n", (tec_safety()?"on":"off"));
       text_return->concatf("TEC Bank%u: %3sabled  %s\n", bank, (tec_powered(bank) ? "En":"Dis"), tec_reversed(bank) ? "(Reversed)":"");
     }
   }

@@ -58,10 +58,10 @@
 
 /* SX1503 GPIO pins */
 // 5V power domain. All outputs default to a condition "disabled".
-#define PUMP0_ENABLE_PIN     0  // Enables a pump.
-#define PUMP1_ENABLE_PIN     1  // Enables a pump.
-#define TEC_HV_ENABLE_PIN    2  // Must be driven high to supply the TECs.
-#define AUX0_ENABLE_PIN      3  // Reserved for relays, fans, etc.
+#define AUX0_ENABLE_PIN      0  // Reserved for relays, fans, etc.
+#define TEC_HV_ENABLE_PIN    1  // Must be driven high to supply the TECs.
+#define PUMP1_ENABLE_PIN     2  // Enables a pump.
+#define PUMP0_ENABLE_PIN     3  // Enables a pump.
 #define TEC_BANK0_P_PIN      4  // H-bridge control
 #define TEC_BANK0_N_PIN      5  // H-bridge control
 #define TEC_BANK1_P_PIN      6  // H-bridge control
