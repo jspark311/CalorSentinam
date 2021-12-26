@@ -92,6 +92,7 @@ const I2CAdapterOptions i2c1_opts(
   400000
 );
 
+// Configurastions for temperature sensors.
 const TMP102Opts temp_m_opts(
   0x49,             // i2c address
   TEMP_M_ALERT_PIN, // ALERT pin
@@ -396,6 +397,32 @@ void sx1503_callback_fxn(uint8_t pin, uint8_t level) {
 *******************************************************************************/
 
 /**
+* Enable or disable the TEC safe state. The TECs are considered "saftied" when
+*   the relay that provides them high voltage is open.
+* This function will refuse to unsafety the TECs if the H-bridge is not off.
+*
+* @param The ID of the TEC bank in question
+* @param Pass true to enable the bank
+* @return 0 on success (which includes "no action")
+*        -1 on GPIO unreadiness
+*        -2 on I/O failure
+*/
+int8_t tec_safety(bool en) {
+  int8_t ret = -1;
+  if (sx1503.initialized()) {
+    ret--;
+    if (en != sx1503.digitalRead(TEC_HV_ENABLE_PIN)) {
+      // Set the drive pin HIGH to apply voltage the the H-bridge. LOW to remove it.
+      if (0 == sx1503.digitalWrite(TEC_HV_ENABLE_PIN, !en)) {
+        ret = 0;
+      }
+    }
+  }
+  return ret;
+}
+
+
+/**
 * The semantics of this function call are such that reversal is not
 *   considered. If you want to enable the bank in reverse, use
 *   tec_reversed(bank_id, true); instead.
@@ -539,6 +566,16 @@ int8_t tec_reversed(const uint8_t BANK_ID, bool rev) {
 }
 
 
+bool tec_safety() {
+  bool ret = false;
+  if (sx1503.initialized()) {
+    // If the drive pin is LOW, the relay is off, and thus, the TECs are safetied.
+    ret = (0 == sx1503.digitalRead(TEC_HV_ENABLE_PIN));
+  }
+  return ret;
+}
+
+
 /**
 * Is there a voltage differential across the TEC bank (in any direction)?
 *
@@ -583,6 +620,41 @@ bool tec_reversed(const uint8_t BANK_ID) {
   }
   return ret;
 }
+
+
+/*******************************************************************************
+* Pump and fan control
+*******************************************************************************/
+int8_t pump_powered(const uint8_t PUMP_ID, bool en) {
+  int8_t ret = -1;
+  if (PUMP_ID < 2) {
+    ret--;
+    if (sx1503.initialized()) {
+      const uint8_t PUMP_PIN = (0 == PUMP_ID) ? PUMP0_ENABLE_PIN : PUMP1_ENABLE_PIN;
+      if (en != sx1503.digitalRead(PUMP_PIN)) {
+        ret--;
+        if (0 == sx1503.digitalWrite(PUMP_PIN, en)) {
+          ret = 0;
+        }
+      }
+      else ret = 0;
+    }
+  }
+  return ret;
+}
+
+
+bool pump_powered(const uint8_t PUMP_ID) {
+  bool ret = false;
+  if (PUMP_ID < 2) {
+    const uint8_t PUMP_PIN = (0 == PUMP_ID) ? PUMP0_ENABLE_PIN : PUMP1_ENABLE_PIN;
+    if (sx1503.initialized()) {
+      ret = sx1503.digitalRead(PUMP_PIN);
+    }
+  }
+  return ret;
+}
+
 
 
 /*******************************************************************************
@@ -1360,63 +1432,55 @@ int callback_fan_tools(StringBuilder* text_return, StringBuilder* args) {
 
 int callback_pump_tools(StringBuilder* text_return, StringBuilder* args) {
   int ret = 0;
-  bool print_pump0_speed = false;
-  bool print_pump1_speed = false;
+  bool print_pump_speed = false;
   char* loop = args->position_trimmed(0);
-  char* cmd  = args->position_trimmed(1);
+  char* pump_str = "";
+  uint8_t pump_id = 255;
+  SensorFilter<uint16_t>* rpm_filter = nullptr;
   if (0 == StringBuilder::strcasecmp(loop, "i")) {
-    if (1 < args->count()) {
-      if (0 == StringBuilder::strcasecmp(cmd, "on")) {
-        if (0 == sx1503.digitalWrite(PUMP0_ENABLE_PIN, 1)) {
-          text_return->concatf("Pump %s enabled.\n", loop);
-        }
-      }
-      else if (0 == StringBuilder::strcasecmp(cmd, "off")) {
-        if (0 == sx1503.digitalWrite(PUMP0_ENABLE_PIN, 0)) {
-          text_return->concatf("Pump %s disabled.\n", loop);
-        }
-      }
-      else if (0 == StringBuilder::strcasecmp(cmd, "filter")) {
-        pump_speed_0.printFilter(text_return);
-      }
-      else print_pump0_speed = true;
-    }
-    else {
-      print_pump0_speed = true;
-    }
+    pump_id = 0;
+    pump_str = "Internal";
+    rpm_filter = &pump_speed_0;
   }
   else if (0 == StringBuilder::strcasecmp(loop, "e")) {
+    pump_id = 1;
+    pump_str = "External";
+    rpm_filter = &pump_speed_1;
+  }
+
+  if (pump_id < 2) {
     if (1 < args->count()) {
+      char* cmd  = args->position_trimmed(1);
       if (0 == StringBuilder::strcasecmp(cmd, "on")) {
-        if (0 == sx1503.digitalWrite(PUMP1_ENABLE_PIN, 1)) {
-          text_return->concatf("Pump %s enabled.\n", loop);
-        }
+        text_return->concatf("pump_powered(%s, true) returns %d.\n", pump_str, pump_powered(pump_id, true));
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "off")) {
-        if (0 == sx1503.digitalWrite(PUMP1_ENABLE_PIN, 0)) {
-          text_return->concatf("Pump %s disabled.\n", loop);
-        }
+        text_return->concatf("pump_powered(%s, false) returns %d.\n", pump_str, pump_powered(pump_id, false));
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "filter")) {
-        pump_speed_1.printFilter(text_return);
+        rpm_filter->printFilter(text_return);
       }
-      else print_pump1_speed = true;
+      else print_pump_speed = true;
     }
-    else print_pump1_speed = true;
+    else {
+      print_pump_speed = true;
+    }
+
+    if (print_pump_speed) {
+      text_return->concatf("Pump (Internal): %3sabled  %4d RPM\n", pump_str, (pump_powered(pump_id) ? "En":"Dis"), rpm_filter->value()*60);
+    }
   }
   else {
     text_return->concat("You must specify the pump for either the internal (i) or external (e) loop.\n");
     ret = -1;
   }
-  if (print_pump0_speed) text_return->concatf("Pump0 (Internal): %3sabled  %4d RPM\n", (sx1503.digitalRead(PUMP0_ENABLE_PIN) ? "En":"Dis"), (int) pump_speed_0.value()*60);
-  if (print_pump1_speed) text_return->concatf("Pump1 (External): %3sabled  %4d RPM\n", (sx1503.digitalRead(PUMP1_ENABLE_PIN) ? "En":"Dis"), (int) pump_speed_1.value()*60);
+
   return ret;
 }
 
 
 int callback_tec_tools(StringBuilder* text_return, StringBuilder* args) {
-  int     ret  = 0;
-
+  int ret = 0;
   if (0 < args->count()) {
     uint8_t bank = (uint8_t) args->position_as_int(0);
     if (1 < args->count()) {
