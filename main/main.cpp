@@ -71,6 +71,9 @@ esp_mqtt_client_handle_t client = nullptr;
 static bool connected_have_ip   = false;
 static bool connected_mqtt      = false;
 
+// Assignment of pin combinations to TEC banks.
+const uint8_t  BANK_PIN_ARRAY[4] = {TEC_BANK0_P_PIN, TEC_BANK0_N_PIN, TEC_BANK1_P_PIN, TEC_BANK1_N_PIN};
+
 // This bus handles UI and the baro sensor.
 const I2CAdapterOptions i2c0_opts(
   0,   // Device number
@@ -357,6 +360,228 @@ void sx1503_callback_fxn(uint8_t pin, uint8_t level) {
     default:
       break;
   }
+}
+
+
+/*******************************************************************************
+* TEC control
+* NOTE: See schematic for calrification.
+* TODO: Copy the schematic out of your head.
+*
+* The hardware will initialize into a safe state, with pull-downs on all pins
+*   that drive NPN load switches. This was done to prevent timing and init
+*   errors from becoming fires.
+* The H-bridge is built in such a way as to air-gap the voltages in the H-bridge
+*   from those of the elements controlling it. This makes the hardware safe to
+*   use while the high-voltage domain is unpowered. This isolation is probably
+*   good into the kilovolt range. But for this application, it only needs to be
+*   good for a few hundred. PCB layout is the limiting factor.
+* The H-bridge has built-in RC time constants to ensure break-before-make
+*   operation of each half of the bridge. This eliminates the need for
+*   error-prone firmware managment of each half of the H-bridge for the sake of
+*   conflict avoidance, while also preventing transient short-circuits through
+*   either leg of the H-bridge during state transitions.
+* Since a TEC is a low-inductance load, the MOSFET body diodes were deemed
+*   sufficient to handle flyback currents during state transitions. Do not use
+*   this machine to drive inductive loads, JiC...
+* There is a large relay before the H-bridges that functions as the master power
+*   switch to the TEC banks. It only controls the high-voltage supply. The
+*   lower operating voltages (12, 5, 3.3) are unaffected by this switch. This
+*   was done to prevent logic and program flow mistakes from turning into a
+*   situation where the machine is hot but unable to run the pumps or fans
+*   without risking the TEC banks adding to the heat.
+* Furthermore, the circuit was designed in such a way that the drive level on
+*   the pin corresponds to the drive level on that half of the H-bridge. This
+*   was done to avoid human error.
+*******************************************************************************/
+
+/**
+* The semantics of this function call are such that reversal is not
+*   considered. If you want to enable the bank in reverse, use
+*   tec_reversed(bank_id, true); instead.
+* Calling this function to enable a bank that is already enabled in reverse will
+*   make no changes, and return no error. If you want to forward-bias a bank
+*   which is presently running in reverse-bias, use
+*   tec_reversed(bank_id, false); instead.
+* The TEC array is considered "powered" when the P pin is driven high and the N
+*   pin is driven low. This condition will cause the H-bridge to forward-bias
+*   the TEC elements according to the color-coding on their wires.
+* The TEC array is considered "unpowered" when the states of the P and N pins
+*   match, since this condition will not allow current flow through the
+*   H-bridge. Technically, the choice to idle the pins high or low is arbitrary,
+*   but we will choose to idle them low, so that drive voltage (which is high
+*   enough to cause pain and/or fire) doesn't needlessly leave the H-bridge.
+* The hardware has it's own safety features that allow TEC bias to be reversed
+*   without regard for the current power state.
+*
+* @param The ID of the TEC bank in question
+* @param Pass true to enable the bank
+* @return 0 on success (which includes "no action")
+*        -1 on illegal bank ID
+*        -2 on GPIO unreadiness
+*        -3 on I/O failure
+*/
+int8_t tec_powered(const uint8_t BANK_ID, bool en) {
+  int8_t ret = -1;
+  if (BANK_ID < 2) {
+    ret--;
+    if (sx1503.initialized()) {
+      const uint16_t GPIO_VAL     = sx1503.getPinValues();
+      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[BANK_ID+0];
+      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[BANK_ID+1];
+      const bool     STATE_P      = (GPIO_VAL >> BANK_PIN_P) & 0x01;
+      const bool     STATE_N      = (GPIO_VAL >> BANK_PIN_N) & 0x01;
+      const bool     BANK_ENABLED = STATE_P ^ STATE_N;
+      if (BANK_ENABLED ^ en) {
+        ret--;  // I/O error is all that can happen from here.
+        if (en) {
+          // At this point, we know the relevent pin states match (and
+          //   shouldn't), but we don't know the polarity.
+          // They _should_ be LOW, but mistakes happen. So check for this
+          //   condition anyway (see safety notes for clarification).
+          if (STATE_N) {
+            // This is the off-case.
+            // Although (STATE_P == STATE_N == HIGH) is a valid way to achieve
+            //   (en == false), doing this will maintain a high voltage on the
+            //   TEC supply lines for no benefit, and marginally higher risk of
+            //   fire and injury.
+            // Set the N pin low to forward bias the bank.
+            if (0 == sx1503.digitalWrite(BANK_PIN_N, 0)) {
+              ret = 0;
+            }
+          }
+          else {
+            // Set the P pin high to forward bias the bank.
+            if (0 == sx1503.digitalWrite(BANK_PIN_P, 1)) {
+              ret = 0;
+            }
+          }
+        }
+        else {
+          // At this point, we know the relevent pin states don't match (and
+          //   should), but we don't know the polarity.
+          // If the bank is presently reverse-biased, set the N pin low to
+          //   remove the differential from the bank. Otherwise, it is
+          //   forward-biased, and we should set the P pin low to achieve same.
+          if (0 == sx1503.digitalWrite((STATE_N ? BANK_PIN_N : BANK_PIN_P), 0)) {
+            ret = 0;
+          }
+        }
+      }
+      else ret = 0;  // Bank is already in the desired state.
+    }
+  }
+  return ret;
+}
+
+
+/**
+* Calling this function will turn on power to the TEC bank, if it wasn't
+*   already.
+*
+* @param BANK_ID The ID of the TEC bank in question
+* @param Pass true to enable the bank
+* @return 0 on success, -1 on illegal bank ID, -2 on I/O failure
+*/
+int8_t tec_reversed(const uint8_t BANK_ID, bool rev) {
+  int8_t ret = -1;
+  if (BANK_ID < 2) {
+    ret--;
+    if (sx1503.initialized()) {
+      const uint16_t GPIO_VAL     = sx1503.getPinValues();
+      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[BANK_ID+0];
+      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[BANK_ID+1];
+      const bool     STATE_P      = (GPIO_VAL >> BANK_PIN_P) & 0x01;
+      const bool     STATE_N      = (GPIO_VAL >> BANK_PIN_N) & 0x01;
+      const bool     BANK_ENABLED = STATE_P ^ STATE_N;
+
+      if (!BANK_ENABLED) {
+        // At this point, we know the relevent pin states match (and
+        //   shouldn't), but we don't know the polarity.
+        // They _should_ be LOW, but mistakes happen. So check for this
+        //   condition anyway (see safety notes for clarification).
+        if (STATE_N) {
+          // This is the off-case.
+          // Although (STATE_P == STATE_N == HIGH) is a valid way to achieve
+          //   (en == false), doing this will maintain a high voltage on the
+          //   TEC supply lines for no benefit, and marginally higher risk of
+          //   fire and injury.
+          // Set the P pin low to reverse-bias the bank, or the N pin to
+          //   forward-bias it.
+          if (0 == sx1503.digitalWrite((rev ? BANK_PIN_P:BANK_PIN_N), 0)) {
+            ret = 0;
+          }
+        }
+        else {
+          // Set the N pin high to reverse-bias the bank, or the P pin to
+          //   forward-bias it.
+          if (0 == sx1503.digitalWrite((rev ? BANK_PIN_N:BANK_PIN_P), 1)) {
+            ret = 0;
+          }
+        }
+      }
+      else if (rev != STATE_N) {
+        // At this point, we know the bank is powered, and that the bias
+        //   direction is not what we want it to be. We need to set both pins.
+        // The hardware allows us to do this safely in a single I/O operation
+        //   using sx1503.setPinValues(new_pin_values); but we will do it one
+        //   pin at a time for now.
+        if (0 == sx1503.digitalWrite(BANK_PIN_P, !STATE_P)) {
+          if (0 == sx1503.digitalWrite(BANK_PIN_N, !STATE_N)) {
+            ret = 0;
+          }
+        }
+      }
+      else ret = 0;  // Bank is already in the desired state.
+    }
+  }
+  return ret;
+}
+
+
+/**
+* Is there a voltage differential across the TEC bank (in any direction)?
+*
+* @param BANK_ID The ID of the TEC bank in question
+* @return true if so. False otherwise.
+*/
+bool tec_powered(const uint8_t BANK_ID) {
+  bool ret = false;
+  if (BANK_ID < 2) {
+    if (sx1503.initialized()) {
+      const uint16_t GPIO_VAL     = sx1503.getPinValues();
+      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[BANK_ID+0];
+      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[BANK_ID+1];
+      const bool     STATE_P      = (GPIO_VAL >> BANK_PIN_P) & 0x01;
+      const bool     STATE_N      = (GPIO_VAL >> BANK_PIN_N) & 0x01;
+      ret = (STATE_P ^ STATE_N);
+    }
+  }
+  return ret;
+}
+
+
+/**
+* Is there a reversed voltage differential across the TEC bank?
+* NOTE: tec_reversed() -> tec_powered()
+* That is: If the bank is reversed, it is also powered.
+*
+* @param BANK_ID The ID of the TEC bank in question
+* @return true if so. False otherwise.
+*/
+bool tec_reversed(const uint8_t BANK_ID) {
+  bool ret = false;
+  if (BANK_ID < 2) {
+    if (sx1503.initialized()) {
+      const uint16_t GPIO_VAL     = sx1503.getPinValues();
+      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[BANK_ID+0];
+      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[BANK_ID+1];
+      const bool     STATE_P      = (GPIO_VAL >> BANK_PIN_P) & 0x01;
+      const bool     STATE_N      = (GPIO_VAL >> BANK_PIN_N) & 0x01;
+      ret = (STATE_P ^ STATE_N) & STATE_N;
+    }
+  }
+  return ret;
 }
 
 
@@ -1190,59 +1415,33 @@ int callback_pump_tools(StringBuilder* text_return, StringBuilder* args) {
 
 
 int callback_tec_tools(StringBuilder* text_return, StringBuilder* args) {
-  const uint16_t GPIO_VAL = sx1503.getPinValues();
-  const bool BANK_0_P       = (GPIO_VAL >> TEC_BANK0_P_PIN) & 0x01;
-  const bool BANK_1_P       = (GPIO_VAL >> TEC_BANK1_P_PIN) & 0x01;
-  const bool BANK_0_N       = (GPIO_VAL >> TEC_BANK0_N_PIN) & 0x01;
-  const bool BANK_1_N       = (GPIO_VAL >> TEC_BANK1_N_PIN) & 0x01;
-  const bool BANK_0_ENABLED = BANK_0_P ^ BANK_0_N;
-  const bool BANK_1_ENABLED = BANK_1_P ^ BANK_1_N;
-  const bool BANK_0_REVERSE = BANK_0_ENABLED & BANK_0_N;
-  const bool BANK_1_REVERSE = BANK_1_ENABLED & BANK_1_N;
-  bool print_bank_0 = false;
-  bool print_bank_1 = false;
-  int  ret = 0;
+  int     ret  = 0;
 
-  int   bank = args->position_as_int(0);
-  char* cmd  = args->position_trimmed(1);
   if (0 < args->count()) {
-    uint8_t bank_pin   = TEC_BANK1_P_PIN;
-    uint8_t bank_pin_n = TEC_BANK1_N_PIN;
-    switch (bank) {
-      case 0:
-        bank_pin   = TEC_BANK0_P_PIN;
-        bank_pin_n = TEC_BANK0_N_PIN;
-      case 1:
-        if (1 < args->count()) {
-          if (0 == StringBuilder::strcasecmp(cmd, "on")) {
-            if (0 == sx1503.setPinValues((GPIO_VAL & ~(1 << bank_pin_n)) | (1 << bank_pin))) {
-              text_return->concatf("TEC bank %d enabled.\n", bank);
-            }
-          }
-          else if (0 == StringBuilder::strcasecmp(cmd, "off")) {
-            if (0 == sx1503.setPinValues(GPIO_VAL & ~((1 << bank_pin_n) | (1 << bank_pin)))) {
-              text_return->concatf("TEC bank %d disabled.\n", bank);
-            }
-          }
-          else if (0 == StringBuilder::strcasecmp(cmd, "reverse")) {
-            if (0 == sx1503.setPinValues(GPIO_VAL & ~((1 << bank_pin) | (1 << bank_pin_n)))) {
-              text_return->concatf("TEC bank %d enabled in reverse.\n", bank);
-            }
-          }
-        }
-        else {
-          print_bank_0 = true;
-          print_bank_1 = true;
-        }
-        break;
-      default:
-        text_return->concat("You must specify the bank (0 or 1).\n");
-        break;
+    uint8_t bank = (uint8_t) args->position_as_int(0);
+    if (1 < args->count()) {
+      char*   cmd  = args->position_trimmed(1);
+      if (0 == StringBuilder::strcasecmp(cmd, "on")) {
+        text_return->concatf("tec_powered(%u, true) returns %d.\n", bank, tec_powered(bank, true));
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "off")) {
+        text_return->concatf("tec_powered(%u, false) returns %d.\n", bank, tec_powered(bank, false));
+      }
+      else if (0 == StringBuilder::strcasecmp(cmd, "reverse")) {
+        bool crev = (2 < args->count()) ? (0 != args->position_as_int(2)) : !tec_reversed(bank);
+        text_return->concatf("tec_reversed(%u, %s) returns %d.\n", bank, (crev?"true":"false"), tec_reversed(bank, crev));
+      }
+      else ret = -1;
+    }
+    else {
+      text_return->concatf("TEC Bank%u: %3sabled  %s\n", bank, (tec_powered(bank) ? "En":"Dis"), tec_reversed(bank) ? "(Reversed)":"");
     }
   }
+  else {
+    text_return->concat("You must specify the bank (0 or 1).\n");
+    ret = -1;
+  }
 
-  if (print_bank_0) text_return->concatf("TEC Bank0: %3sabled  %s\n", (BANK_0_ENABLED ? "En":"Dis"), BANK_0_REVERSE ? "(Reversed)":"");
-  if (print_bank_1) text_return->concatf("TEC Bank1: %3sabled  %s\n", (BANK_1_ENABLED ? "En":"Dis"), BANK_1_REVERSE ? "(Reversed)":"");
   return ret;
 }
 

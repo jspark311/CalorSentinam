@@ -264,9 +264,15 @@ void timeoutCheckVibLED();
 const char* const getSensorIDString(const SensorID);
 void listAllSensors(StringBuilder*);
 
-uint16_t* bitmapPointer(unsigned int idx);
+/* Top-level TEC control */
+int8_t tec_powered(const uint8_t bank_id, bool en);
+int8_t tec_reversed(const uint8_t bank_id, bool en);
+bool   tec_powered(const uint8_t bank_id);
+bool   tec_reversed(const uint8_t bank_id);
+
 
 /* Display helper routines */
+uint16_t* bitmapPointer(unsigned int idx);
 void render_button_icon(uint8_t sym, int x, int y, uint16_t color);
 
 void draw_graph_obj(
