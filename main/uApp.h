@@ -199,7 +199,8 @@ class uAppRoot : public uApp {
     ~uAppRoot();
 
   protected:
-    AppID app_page = AppID::CALORIMETER;
+    AppID   app_page   = AppID::CALORIMETER;
+    uint8_t modal_ctrl = 0;   // Set to nonzero for modal usage.
 
     int8_t _lc_on_preinit();
     int8_t _lc_on_active();

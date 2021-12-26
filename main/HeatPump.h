@@ -220,6 +220,8 @@ extern SSD13xx display;
 extern SX1503 sx1503;
 extern SX8634* touch;
 
+extern float fan_pwm_ratio;
+
 /* Sensor representations */
 extern BME280I2C baro;
 extern TMP102 temp_sensor_m;

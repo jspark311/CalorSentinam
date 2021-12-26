@@ -460,8 +460,8 @@ int8_t tec_powered(const uint8_t BANK_ID, bool en) {
     ret--;
     if (sx1503.initialized()) {
       const uint16_t GPIO_VAL     = sx1503.getPinValues();
-      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[BANK_ID+0];
-      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[BANK_ID+1];
+      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[(BANK_ID<<1)+0];
+      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[(BANK_ID<<1)+1];
       const bool     STATE_P      = (GPIO_VAL >> BANK_PIN_P) & 0x01;
       const bool     STATE_N      = (GPIO_VAL >> BANK_PIN_N) & 0x01;
       const bool     BANK_ENABLED = STATE_P ^ STATE_N;
@@ -522,8 +522,8 @@ int8_t tec_reversed(const uint8_t BANK_ID, bool rev) {
     ret--;
     if (sx1503.initialized()) {
       const uint16_t GPIO_VAL     = sx1503.getPinValues();
-      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[BANK_ID+0];
-      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[BANK_ID+1];
+      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[(BANK_ID<<1)+0];
+      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[(BANK_ID<<1)+1];
       const bool     STATE_P      = (GPIO_VAL >> BANK_PIN_P) & 0x01;
       const bool     STATE_N      = (GPIO_VAL >> BANK_PIN_N) & 0x01;
       const bool     BANK_ENABLED = STATE_P ^ STATE_N;
@@ -593,8 +593,8 @@ bool tec_powered(const uint8_t BANK_ID) {
   if (BANK_ID < 2) {
     if (sx1503.initialized()) {
       const uint16_t GPIO_VAL     = sx1503.getPinValues();
-      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[BANK_ID+0];
-      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[BANK_ID+1];
+      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[(BANK_ID<<1)+0];
+      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[(BANK_ID<<1)+1];
       const bool     STATE_P      = (GPIO_VAL >> BANK_PIN_P) & 0x01;
       const bool     STATE_N      = (GPIO_VAL >> BANK_PIN_N) & 0x01;
       ret = (STATE_P ^ STATE_N);
@@ -617,8 +617,8 @@ bool tec_reversed(const uint8_t BANK_ID) {
   if (BANK_ID < 2) {
     if (sx1503.initialized()) {
       const uint16_t GPIO_VAL     = sx1503.getPinValues();
-      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[BANK_ID+0];
-      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[BANK_ID+1];
+      const uint8_t  BANK_PIN_P   = BANK_PIN_ARRAY[(BANK_ID<<1)+0];
+      const uint8_t  BANK_PIN_N   = BANK_PIN_ARRAY[(BANK_ID<<1)+1];
       const bool     STATE_P      = (GPIO_VAL >> BANK_PIN_P) & 0x01;
       const bool     STATE_N      = (GPIO_VAL >> BANK_PIN_N) & 0x01;
       ret = (STATE_P ^ STATE_N) & STATE_N;
@@ -1473,7 +1473,7 @@ int callback_pump_tools(StringBuilder* text_return, StringBuilder* args) {
     }
 
     if (print_pump_speed) {
-      text_return->concatf("Pump (Internal): %3sabled  %4d RPM\n", pump_str, (pump_powered(pump_id) ? "En":"Dis"), rpm_filter->value()*60);
+      text_return->concatf("Pump (%s): %3sabled  %4d RPM\n", pump_str, (pump_powered(pump_id) ? "En":"Dis"), rpm_filter->value()*60);
     }
   }
   else {
@@ -1663,11 +1663,38 @@ void manuvr_task(void* pvParameter) {
         pressure_filter.feedFilter(baro.pres());
       }
     }
-    if (temp_sensor_m.devFound()) {   temp_sensor_m.poll();    }
-    if (temp_sensor_0.devFound()) {   temp_sensor_0.poll();    }
-    if (temp_sensor_1.devFound()) {   temp_sensor_1.poll();    }
-    if (temp_sensor_2.devFound()) {   temp_sensor_2.poll();    }
-    if (temp_sensor_3.devFound()) {   temp_sensor_3.poll();    }
+    if (temp_sensor_m.devFound()) {
+      temp_sensor_m.poll();
+      if (temp_sensor_m.dataReady()) {
+        temperature_filter_m.feedFilter(temp_sensor_m.temperature());
+      }
+    }
+    if (temp_sensor_0.devFound()) {
+      temp_sensor_0.poll();
+      if (temp_sensor_0.dataReady()) {
+        temperature_filter_0.feedFilter(temp_sensor_0.temperature());
+      }
+    }
+    if (temp_sensor_1.devFound()) {
+      temp_sensor_1.poll();
+      if (temp_sensor_1.dataReady()) {
+        temperature_filter_1.feedFilter(temp_sensor_1.temperature());
+      }
+    }
+    if (temp_sensor_2.devFound()) {
+      temp_sensor_2.poll();
+      if (temp_sensor_2.dataReady()) {
+        temperature_filter_2.feedFilter(temp_sensor_2.temperature());
+      }
+    }
+    if (temp_sensor_3.devFound()) {
+      temp_sensor_3.poll();
+      if (temp_sensor_3.dataReady()) {
+        temperature_filter_3.feedFilter(temp_sensor_3.temperature());
+      }
+    }
+
+    update_tach_values();
 
     uint32_t millis_now = millis();
     if ((last_interaction + 100000) <= millis_now) {
@@ -1676,7 +1703,6 @@ void manuvr_task(void* pvParameter) {
         uApp::setAppActive(AppID::HOT_STANDBY);
       }
     }
-    update_tach_values();
     uApp::appActive()->refresh();
 
     if (0 < console_uart.poll()) {

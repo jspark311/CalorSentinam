@@ -70,11 +70,12 @@ int8_t uAppConfigurator::_lc_on_inactive() {
 * @return 0 for no change, 1 for display refresh, -1 for application change.
 */
 int8_t uAppConfigurator::_process_user_input() {
-  int8_t ret = 0;
+  int8_t ret = 1;
 
   if (_slider_current != _slider_pending) {
     redraw_app_window();
     _slider_current = _slider_pending;
+    FB->fill(0);
     ret = 1;
   }
   if (_buttons_current != _buttons_pending) {
@@ -95,6 +96,13 @@ int8_t uAppConfigurator::_process_user_input() {
 * Draws the app.
 */
 void uAppConfigurator::_redraw_window() {
-  const uint8_t TEXT_OFFSET = 56;
-  FB->fillRect(0, 11, FB->x()-1, FB->y()-12, 0);
+  FB->setTextColor(WHITE, 0x0000);
+  FB->setCursor(0, 12);
+  FB->writeString("Allow sub-zero:\n    ");
+  FB->setTextColor(homeostasis.conf_sw1_enable_subzero ? RED:GREEN, 0x0000);
+  FB->writeString(homeostasis.conf_sw1_enable_subzero ? "ON" : "OFF");
+
+  FB->writeString("\nTEC arrangement:\n    ");
+  FB->setTextColor(BLUE, 0x0000);
+  FB->writeString(homeostasis.conf_sw2_staged_tec_banks ? "Staged" : "Ganged");
 }

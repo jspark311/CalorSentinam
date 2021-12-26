@@ -150,20 +150,22 @@ void uAppBoot::_redraw_window() {
       bool ret_local = false;
       switch (INIT_LIST[i].flag_mask) {
         case UAPP_BOOT_FLAG_INIT_DISPLAY:
-          FB->fill(BLACK);
-          FB->setTextColor(WHITE, BLACK);
-          FB->setCursor(0, 0);
-          FB->setTextSize(1);
-          FB->writeString("Calor Sentinam");
-          FB->setTextSize(0);
-          FB->fillRect(0, 11, BLOCK_WIDTH*INIT_LIST_LEN, BLOCK_HEIGHT, YELLOW);
-          FB->fillRect(0, 24, BLOCK_WIDTH*INIT_LIST_LEN, BLOCK_HEIGHT, YELLOW);
-          ret_local = true;
+          if (display.enabled()) {
+            FB->fill(BLACK);
+            FB->setTextColor(WHITE, BLACK);
+            FB->setCursor(0, 0);
+            FB->setTextSize(1);
+            FB->writeString("Calor Sentinam");
+            FB->setTextSize(0);
+            FB->fillRect(0, 11, BLOCK_WIDTH*INIT_LIST_LEN, BLOCK_HEIGHT, YELLOW);
+            FB->fillRect(0, 24, BLOCK_WIDTH*INIT_LIST_LEN, BLOCK_HEIGHT, YELLOW);
+            ret_local = true;
+          }
           break;
         case UAPP_BOOT_FLAG_INIT_SX1503:
-          if (sx1503.getAdapter()->busIdle()) {
+          //if (sx1503.getAdapter()->busIdle()) {
             ret_local = (0 == sx1503.init());
-          }
+          //}
           break;
         case UAPP_BOOT_FLAG_INIT_TEMP_MOSFET:
           if (temp_sensor_m.getAdapter()->busIdle()) {
