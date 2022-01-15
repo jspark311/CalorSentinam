@@ -936,6 +936,50 @@ static void cb_longpress(int button, uint32_t duration) {
 * Console callbacks
 *******************************************************************************/
 
+int callback_help(StringBuilder* text_return, StringBuilder* args) {
+  return console.console_handler_help(text_return, args);
+}
+
+int callback_console_tools(StringBuilder* text_return, StringBuilder* args) {
+  return console.console_handler_conf(text_return, args);
+}
+
+int callback_touch_tools(StringBuilder* text_return, StringBuilder* args) {
+  return touch->console_handler(text_return, args);
+}
+
+int callback_sx1503_test(StringBuilder* text_return, StringBuilder* args) {
+  int ret = -1;
+  char* cmd = args->position_trimmed(0);
+  // We interdict if the command is something specific to this application.
+  if (0 == StringBuilder::strcasecmp(cmd, "reconf")) {
+    int8_t ret_local = sx1503.unserialize(sx1503_config, SX1503_SERIALIZE_SIZE);
+    text_return->concatf("sx1503 reconf returns %d\n", ret_local);
+    ret = 0;
+  }
+  else ret = sx1503.console_handler(text_return, args);
+
+  return ret;
+}
+
+int callback_link_tools(StringBuilder* text_return, StringBuilder* args) {
+  int ret = -1;
+  char* cmd = args->position_trimmed(0);
+  // We interdict if the command is something specific to this application.
+  if (0 == StringBuilder::strcasecmp(cmd, "desc")) {
+    // Send a description request message.
+    KeyValuePair a((uint32_t) millis(), "time_ms");
+    a.append((uint32_t) randomUInt32(), "rand");
+    int8_t ret_local = m_link->send(&a, true);
+    text_return->concatf("Description request send() returns ID %u\n", ret_local);
+    ret = 0;
+  }
+  else ret = m_link->console_handler(text_return, args);
+
+  return ret;
+}
+
+
 
 int callback_homeostasis_tool(StringBuilder* text_return, StringBuilder* args) {
   int ret = 0;
@@ -946,86 +990,6 @@ int callback_homeostasis_tool(StringBuilder* text_return, StringBuilder* args) {
   else {
     homeostasis.printDebug(text_return);
   }
-  return ret;
-}
-
-
-int callback_sx1503_test(StringBuilder* text_return, StringBuilder* args) {
-  int ret = 0;
-  char* cmd = args->position_trimmed(0);
-  uint8_t arg0 = args->position_as_int(1);
-  uint8_t arg1 = args->position_as_int(2);
-
-  if (0 == StringBuilder::strcasecmp(cmd, "init")) {
-    text_return->concatf("sx1503.init() returns %d\n", sx1503.init());
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "reconf")) {
-    int8_t ret_local = sx1503.unserialize(sx1503_config, SX1503_SERIALIZE_SIZE);
-    text_return->concatf("sx1503 reconf returns %d\n", ret_local);
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "reset")) {
-    text_return->concatf("sx1503.reset() returns %d\n", sx1503.reset());
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "mode")) {
-    switch (args->count()) {
-      case 3:
-        switch ((GPIOMode) arg1) {
-          case GPIOMode::INPUT:
-          case GPIOMode::OUTPUT:
-          case GPIOMode::INPUT_PULLUP:
-          case GPIOMode::INPUT_PULLDOWN:
-          case GPIOMode::OUTPUT_OD:
-          case GPIOMode::BIDIR_OD:
-          case GPIOMode::BIDIR_OD_PULLUP:
-          case GPIOMode::ANALOG_OUT:
-          case GPIOMode::ANALOG_IN:
-            text_return->concatf("pinMode(%u, %s) Returns %d.\n", arg0, getPinModeStr((GPIOMode) arg1), sx1503.gpioMode(arg0, (GPIOMode)arg1));
-            break;
-          default:
-            text_return->concat("Invalid GPIO mode.\n");
-            break;
-        }
-        break;
-      default:
-        text_return->concatf("%u: %s\n", (uint8_t) GPIOMode::INPUT,           getPinModeStr(GPIOMode::INPUT));
-        text_return->concatf("%u: %s\n", (uint8_t) GPIOMode::OUTPUT,          getPinModeStr(GPIOMode::OUTPUT));
-        text_return->concatf("%u: %s\n", (uint8_t) GPIOMode::INPUT_PULLUP,    getPinModeStr(GPIOMode::INPUT_PULLUP));
-        text_return->concatf("%u: %s\n", (uint8_t) GPIOMode::INPUT_PULLDOWN,  getPinModeStr(GPIOMode::INPUT_PULLDOWN));
-        text_return->concatf("%u: %s\n", (uint8_t) GPIOMode::OUTPUT_OD,       getPinModeStr(GPIOMode::OUTPUT_OD));
-        text_return->concatf("%u: %s\n", (uint8_t) GPIOMode::BIDIR_OD,        getPinModeStr(GPIOMode::BIDIR_OD));
-        text_return->concatf("%u: %s\n", (uint8_t) GPIOMode::BIDIR_OD_PULLUP, getPinModeStr(GPIOMode::BIDIR_OD_PULLUP));
-        text_return->concatf("%u: %s\n", (uint8_t) GPIOMode::ANALOG_OUT,      getPinModeStr(GPIOMode::ANALOG_OUT));
-        text_return->concatf("%u: %s\n", (uint8_t) GPIOMode::ANALOG_IN,       getPinModeStr(GPIOMode::ANALOG_IN));
-        break;
-    }
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "val")) {
-    text_return->concatf("GPIO %d ", arg0);
-    switch (args->count()) {
-      case 3:
-        {
-          int8_t ret0 = sx1503.digitalWrite(arg0, (0 != arg1));
-          text_return->concatf("set to %s. Returns %d.\n", (0 != arg1) ? "high" : "low", ret0);
-        }
-        break;
-      default:
-        {
-          int8_t ret0 = sx1503.digitalRead(arg0);
-          text_return->concatf("reads %s.\n", ret0 ? "high" : "low");
-        }
-        break;
-    }
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "refresh")) {
-    text_return->concatf("sx1503.refresh() returns %d\n", sx1503.refresh());
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "regs")) {
-    sx1503.printRegs(text_return);
-  }
-  else {
-    sx1503.printDebug(text_return);
-  }
-
   return ret;
 }
 
@@ -1056,48 +1020,6 @@ int callback_display_test(StringBuilder* text_return, StringBuilder* args) {
 
   millis_1 = millis();
   text_return->concatf("Display update took %ums\n", millis_1-millis_0);
-  return ret;
-}
-
-
-int callback_link_tools(StringBuilder* text_return, StringBuilder* args) {
-  int ret = 0;
-  char* cmd = args->position_trimmed(0);
-  if (0 == StringBuilder::strcasecmp(cmd, "info")) {
-    m_link->printDebug(text_return);
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "reset")) {
-    text_return->concatf("Link reset() returns %d\n", m_link->reset());
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "hangup")) {
-    text_return->concatf("Link hangup() returns %d\n", m_link->hangup());
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "verbosity")) {
-    switch (args->count()) {
-      case 2:
-        m_link->verbosity(0x07 & args->position_as_int(1));
-      default:
-        text_return->concatf("Link verbosity is %u\n", m_link->verbosity());
-        break;
-    }
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "log")) {
-    //if (1 < args->count()) {
-      StringBuilder tmp_log("This is a remote log test.\n");
-      int8_t ret_local = m_link->writeRemoteLog(&tmp_log, false);
-      text_return->concatf("Remote log write returns %d\n", ret_local);
-    //}
-    //else text_return->concat("Usage: link log <logText>\n");
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "desc")) {
-    // Send a description request message.
-    KeyValuePair a((uint32_t) millis(), "time_ms");
-    a.append((uint32_t) randomUInt32(), "rand");
-    int8_t ret_local = m_link->send(&a, true);
-    text_return->concatf("Description request send() returns ID %u\n", ret_local);
-  }
-  else text_return->concat("Usage: [info|reset|hangup|verbosity|desc]\n");
-
   return ret;
 }
 
@@ -1134,43 +1056,6 @@ int callback_active_app(StringBuilder* text_return, StringBuilder* args) {
     else text_return->concat("Need an app ID.\n");
   }
   else text_return->concatf("Current app:  %s\n", uApp::appActive()->getAppIDString());
-  return ret;
-}
-
-
-int callback_touch_tools(StringBuilder* text_return, StringBuilder* args) {
-  int ret = 0;
-  char* cmd = args->position_trimmed(0);
-  if (0 < args->count()) {
-    if (0 == StringBuilder::strcasecmp(cmd, "info")) {
-      touch->printDebug(text_return);
-    }
-    else if (0 == StringBuilder::strcasecmp(cmd, "poll")) {
-      text_return->concatf("SX8634 poll() returns %d.\n", touch->poll());
-    }
-    else if (0 == StringBuilder::strcasecmp(cmd, "init")) {
-      text_return->concatf("SX8634 init() returns %d.\n", touch->init());
-    }
-    else if (0 == StringBuilder::strcasecmp(cmd, "irq")) {
-      text_return->concatf("SX8634 read_irq_registers() returns %d.\n", touch->read_irq_registers());
-    }
-    else if (0 == StringBuilder::strcasecmp(cmd, "reset")) {
-      text_return->concatf("SX8634 reset() returns %d.\n", touch->reset());
-    }
-    else if (0 == StringBuilder::strcasecmp(cmd, "ping")) {
-      text_return->concatf("SX8634 ping() returns %d\n", touch->ping());
-    }
-    else if (0 == StringBuilder::strcasecmp(cmd, "mode")) {
-      if (1 < args->count()) {
-        int mode_int = args->position_as_int(1);
-        text_return->concatf("SX8634 setMode(%s) returns %d.\n", SX8634::getModeStr((SX8634OpMode) mode_int), touch->setMode((SX8634OpMode) mode_int));
-      }
-      text_return->concatf("SX8634 mode set to %s.\n", SX8634::getModeStr(touch->operationalMode()));
-    }
-    else ret = -1;
-  }
-  else ret = -1;
-
   return ret;
 }
 
@@ -1261,16 +1146,6 @@ int callback_i2c_tools(StringBuilder* text_return, StringBuilder* args) {
   }
   return ret;
 }
-
-
-int callback_help(StringBuilder* text_return, StringBuilder* args) {
-  if (0 < args->count()) {
-    console.printHelp(text_return, args->position_trimmed(0));
-  }
-  else console.printHelp(text_return);
-  return 0;
-}
-
 
 
 int callback_sensor_tools(StringBuilder* text_return, StringBuilder* args) {
@@ -1501,103 +1376,6 @@ int callback_tec_tools(StringBuilder* text_return, StringBuilder* args) {
 }
 
 
-
-int callback_console_tools(StringBuilder* text_return, StringBuilder* args) {
-  int ret = 0;
-  char* cmd    = args->position_trimmed(0);
-  int   arg1   = args->position_as_int(1);
-  bool  print_term_enum = false;
-  if (0 == StringBuilder::strcasecmp(cmd, "echo")) {
-    if (1 < args->count()) {
-      console.localEcho(0 != arg1);
-    }
-    text_return->concatf("Console RX echo %sabled.\n", console.localEcho()?"en":"dis");
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "history")) {
-    if (1 < args->count()) {
-      console.emitPrompt(0 != arg1);
-      char* subcmd = args->position_trimmed(1);
-      if (0 == StringBuilder::strcasecmp(subcmd, "clear")) {
-        console.clearHistory();
-        text_return->concat("History cleared.\n");
-      }
-      else if (0 == StringBuilder::strcasecmp(subcmd, "depth")) {
-        if (2 < args->count()) {
-          arg1 = args->position_as_int(2);
-          console.maxHistoryDepth(arg1);
-        }
-        text_return->concatf("History depth: %u\n", console.maxHistoryDepth());
-      }
-      else if (0 == StringBuilder::strcasecmp(subcmd, "logerrors")) {
-        if (2 < args->count()) {
-          arg1 = args->position_as_int(2);
-          console.historyFail(0 != arg1);
-        }
-        text_return->concatf("History %scludes failed commands.\n", console.historyFail()?"in":"ex");
-      }
-      else text_return->concat("Valid options are [clear|depth|logerrors]\n");
-    }
-    else console.printHistory(text_return);
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "help-on-fail")) {
-    if (1 < args->count()) {
-      console.printHelpOnFail(0 != arg1);
-    }
-    text_return->concatf("Console prints command help on failure: %s.\n", console.printHelpOnFail()?"yes":"no");
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "prompt")) {
-    if (1 < args->count()) {
-      console.emitPrompt(0 != arg1);
-    }
-    text_return->concatf("Console autoprompt %sabled.\n", console.emitPrompt()?"en":"dis");
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "force")) {
-    if (1 < args->count()) {
-      console.forceReturn(0 != arg1);
-    }
-    text_return->concatf("Console force-return %sabled.\n", console.forceReturn()?"en":"dis");
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "rxterm")) {
-    if (1 < args->count()) {
-      switch (arg1) {
-        case 0:  case 1:  case 2:  case 3:
-          console.setRXTerminator((LineTerm) arg1);
-          break;
-        default:
-          print_term_enum = true;
-          break;
-      }
-    }
-    text_return->concatf("Console RX terminator: %s\n", ParsingConsole::terminatorStr(console.getRXTerminator()));
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "txterm")) {
-    if (1 < args->count()) {
-      switch (arg1) {
-        case 0:  case 1:  case 2:  case 3:
-          console.setTXTerminator((LineTerm) arg1);
-          break;
-        default:
-          print_term_enum = true;
-          break;
-      }
-    }
-    text_return->concatf("Console TX terminator: %s\n", ParsingConsole::terminatorStr(console.getTXTerminator()));
-  }
-  else {
-    ret = -1;
-  }
-
-  if (print_term_enum) {
-    text_return->concat("Terminator options:\n");
-    text_return->concat("\t0: ZEROBYTE\n");
-    text_return->concat("\t1: CR\n");
-    text_return->concat("\t2: LF\n");
-    text_return->concat("\t3: CRLF\n");
-  }
-  return ret;
-}
-
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -1754,23 +1532,24 @@ void app_main() {
   console.localEcho(true);
   console.printHelpOnFail(true);
 
-  console.defineCommand("help",        '?', ParsingConsole::tcodes_str_1, "Prints help to console.", "", 0, callback_help);
+  console.defineCommand("help",        '?',  ParsingConsole::tcodes_str_1,  "Prints help to console.", "[<specific command>]", 0, callback_help);
+  console.defineCommand("console",     '\0', ParsingConsole::tcodes_str_3, "Console conf.", "[echo|prompt|force|rxterm|txterm]", 0, callback_console_tools);
   platform.configureConsole(&console);
+  console.defineCommand("sx",          '\0', ParsingConsole::tcodes_str_4, "SX1503 test", "", 0, callback_sx1503_test);
+  console.defineCommand("touch",       '\0', ParsingConsole::tcodes_str_4, "SX8634 tools", "", 0, callback_touch_tools);
+  console.defineCommand("link",        'l',  ParsingConsole::tcodes_str_4, "Linked device tools.", "", 0, callback_link_tools);
 
   console.defineCommand("homeostasis", 'h',  ParsingConsole::tcodes_str_4, "Homeostasis parameters", "", 0, callback_homeostasis_tool);
-  console.defineCommand("sx",          '\0', ParsingConsole::tcodes_str_4, "SX1503 test", "", 0, callback_sx1503_test);
   console.defineCommand("disp",        'd',  ParsingConsole::tcodes_str_4, "Display test", "", 0, callback_display_test);
   console.defineCommand("app",         'a',  ParsingConsole::tcodes_str_4, "Select active application.", "", 0, callback_active_app);
-  console.defineCommand("touch",       '\0', ParsingConsole::tcodes_str_4, "SX8634 tools", "", 0, callback_touch_tools);
   console.defineCommand("sensor",      's',  ParsingConsole::tcodes_str_4, "Sensor tools", "", 0, callback_sensor_tools);
   console.defineCommand("filter",      '\0', ParsingConsole::tcodes_str_3, "Sensor filter info.", "", 0, callback_sensor_filter_info);
   console.defineCommand("fan",         'f',  ParsingConsole::tcodes_str_3, "Fan tools", "", 0, callback_fan_tools);
   console.defineCommand("pump",        'p',  ParsingConsole::tcodes_str_3, "Pump tools", "", 0, callback_pump_tools);
   console.defineCommand("tec",         't',  ParsingConsole::tcodes_str_3, "TEC tools", "", 0, callback_tec_tools);
-  console.defineCommand("i2c",         '\0', ParsingConsole::tcodes_str_4, "I2C tools", "Usage: i2c <bus> <action> [addr]", 1, callback_i2c_tools);
+  console.defineCommand("i2c",         '\0', ParsingConsole::tcodes_str_4, "I2C tools", "i2c <bus> <action> [addr]", 1, callback_i2c_tools);
   console.defineCommand("spi",         '\0', ParsingConsole::tcodes_str_3, "SPI debug.", "", 1, callback_spi_debug);
-  console.defineCommand("console",     '\0', ParsingConsole::tcodes_str_3, "Console conf.", "[echo|prompt|force|rxterm|txterm]", 0, callback_console_tools);
-  console.defineCommand("link",        'l',  ParsingConsole::tcodes_str_4, "Linked device tools.", "", 0, callback_link_tools);
+
   console.init();
 
   StringBuilder ptc("HeatPump ");
