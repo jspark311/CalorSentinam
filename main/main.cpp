@@ -948,6 +948,10 @@ int callback_touch_tools(StringBuilder* text_return, StringBuilder* args) {
   return touch->console_handler(text_return, args);
 }
 
+int callback_display_test(StringBuilder* text_return, StringBuilder* args) {
+  return display.console_handler(text_return, args);
+}
+
 int callback_sx1503_test(StringBuilder* text_return, StringBuilder* args) {
   int ret = -1;
   char* cmd = args->position_trimmed(0);
@@ -980,6 +984,39 @@ int callback_link_tools(StringBuilder* text_return, StringBuilder* args) {
 }
 
 
+int callback_spi_debug(StringBuilder* text_return, StringBuilder* args) {
+  int ret = -1;
+  if (0 < args->count()) {
+    int bus_id = args->position_as_int(0);
+    args->drop_position(0);
+    switch (bus_id) {
+      case 1:   ret = spi_bus.console_handler(text_return, args);  break;
+      default:
+        text_return->concatf("Unsupported bus: %d\n", bus_id);
+        break;
+    }
+  }
+  return ret;
+}
+
+
+int callback_i2c_tools(StringBuilder* text_return, StringBuilder* args) {
+  int ret = -1;
+  if (0 < args->count()) {
+    int bus_id = args->position_as_int(0);
+    args->drop_position(0);
+    switch (bus_id) {
+      case 0:   ret = i2c0.console_handler(text_return, args);  break;
+      case 1:   ret = i2c1.console_handler(text_return, args);  break;
+      default:
+        text_return->concatf("Unsupported bus: %d\n", bus_id);
+        break;
+    }
+  }
+  return ret;
+}
+
+
 
 int callback_homeostasis_tool(StringBuilder* text_return, StringBuilder* args) {
   int ret = 0;
@@ -990,36 +1027,6 @@ int callback_homeostasis_tool(StringBuilder* text_return, StringBuilder* args) {
   else {
     homeostasis.printDebug(text_return);
   }
-  return ret;
-}
-
-
-int callback_display_test(StringBuilder* text_return, StringBuilder* args) {
-  int ret = 0;
-  char* cmd = args->position_trimmed(0);
-  uint32_t millis_0 = millis();
-  uint32_t millis_1 = millis_0;
-
-  if (0 == StringBuilder::strcasecmp(cmd, "init")) {
-    text_return->concatf("display.init() returns %d\n", display.init());
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "reset")) {
-    text_return->concatf("display.reset() returns %d\n", display.reset());
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "commit")) {
-    text_return->concatf("commitFrameBuffer() returns %d\n", display.commitFrameBuffer());
-  }
-  else if (0 == StringBuilder::strcasecmp(cmd, "fill")) {
-    uint16_t color = (uint16_t) args->position_as_int(1);
-    display.fill(color);
-    text_return->concatf("display.fill(%u)\n", color);
-  }
-  else {
-    display.printDebug(text_return);
-  }
-
-  millis_1 = millis();
-  text_return->concatf("Display update took %ums\n", millis_1-millis_0);
   return ret;
 }
 
@@ -1056,94 +1063,6 @@ int callback_active_app(StringBuilder* text_return, StringBuilder* args) {
     else text_return->concat("Need an app ID.\n");
   }
   else text_return->concatf("Current app:  %s\n", uApp::appActive()->getAppIDString());
-  return ret;
-}
-
-
-int callback_spi_debug(StringBuilder* text_return, StringBuilder* args) {
-  int ret = 0;
-  if (0 < args->count()) {
-    int arg0 = args->position_as_int(0);
-    char* cmd = args->position_trimmed(1);
-    SPIAdapter* b_ptr = nullptr;
-    switch (arg0) {
-      case 1:
-        b_ptr = &spi_bus;
-        break;
-      default:
-        text_return->concatf("Unsupported adapter: %d\n", arg0);
-        break;
-    }
-    if (nullptr != b_ptr) {
-      if (0 == StringBuilder::strcasecmp(cmd, "poll")) {
-        text_return->concatf("SP%u advance_work_queue() returns: %d\n", arg0, b_ptr->advance_work_queue());
-        text_return->concatf("SP%u service_callback_queue() returns: %d\n", arg0, b_ptr->service_callback_queue());
-      }
-      else if (0 == StringBuilder::strcasecmp(cmd, "queue")) {
-        uint8_t arg2 = (uint8_t) args->position_as_int(2);
-        b_ptr->printWorkQueue(text_return, strict_max((uint8_t) 3, arg2));
-      }
-      else if (0 == StringBuilder::strcasecmp(cmd, "purge")) {
-        text_return->concatf("SPI%u purge_current_job()\n", arg0);
-        b_ptr->purge_current_job();
-      }
-      else if (0 == StringBuilder::strcasecmp(cmd, "ragepurge")) {
-        text_return->concatf("SPI%u purge_queued_work()\n", arg0);
-        text_return->concatf("SPI%u purge_current_job()\n", arg0);
-        b_ptr->purge_queued_work();
-        b_ptr->purge_current_job();
-      }
-      else if (0 == StringBuilder::strcasecmp(cmd, "verbosity")) {
-        if (2 < args->count()) {
-          uint8_t arg2 = (uint8_t) args->position_as_int(2);
-          b_ptr->setVerbosity(arg2);
-        }
-        text_return->concatf("Verbosity for SPI%u is %d\n", arg0, b_ptr->getVerbosity());
-      }
-      else {
-        b_ptr->printAdapter(text_return);
-      }
-    }
-  }
-  else ret = -1;
-
-  return ret;
-}
-
-
-int callback_i2c_tools(StringBuilder* text_return, StringBuilder* args) {
-  int ret = 0;
-  int   bus_id = args->position_as_int(0);
-  char* cmd    = args->position_trimmed(1);
-  int   arg2   = args->position_as_int(2);
-  I2CAdapter* bus = nullptr;
-  switch (bus_id) {
-    case 0:    bus = &i2c0;  break;
-    case 1:    bus = &i2c1;  break;
-    default:
-      text_return->concatf("Unsupported bus: %d\n", bus_id);
-      break;
-  }
-  if (nullptr != bus) {
-    if (0 == StringBuilder::strcasecmp(cmd, "purge")) {
-      text_return->concatf("I2C%u purge_current_job()\n", bus_id);
-      bus->purge_current_job();
-    }
-    else if (0 == StringBuilder::strcasecmp(cmd, "ragepurge")) {
-      text_return->concatf("I2C%u purge_queued_work()\n", bus_id);
-      text_return->concatf("I2C%u purge_current_job()\n", bus_id);
-      bus->purge_queued_work();
-      bus->purge_current_job();
-    }
-    else if (0 == StringBuilder::strcasecmp(cmd, "ping")) {
-      bus->ping_slave_addr((args->count() > 2) ? arg2 : 1);
-      text_return->concatf("i2c%d.ping_slave_addr(0x%02x) started.\n", bus_id, arg2);
-    }
-    else {
-      bus->printDebug(text_return);
-      bus->printPingMap(text_return);
-    }
-  }
   return ret;
 }
 
@@ -1532,12 +1451,14 @@ void app_main() {
   console.localEcho(true);
   console.printHelpOnFail(true);
 
-  console.defineCommand("help",        '?',  ParsingConsole::tcodes_str_1,  "Prints help to console.", "[<specific command>]", 0, callback_help);
+  console.defineCommand("help",        '?',  ParsingConsole::tcodes_str_1, "Prints help to console.", "[<specific command>]", 0, callback_help);
   console.defineCommand("console",     '\0', ParsingConsole::tcodes_str_3, "Console conf.", "[echo|prompt|force|rxterm|txterm]", 0, callback_console_tools);
   platform.configureConsole(&console);
   console.defineCommand("sx",          '\0', ParsingConsole::tcodes_str_4, "SX1503 test", "", 0, callback_sx1503_test);
   console.defineCommand("touch",       '\0', ParsingConsole::tcodes_str_4, "SX8634 tools", "", 0, callback_touch_tools);
   console.defineCommand("link",        'l',  ParsingConsole::tcodes_str_4, "Linked device tools.", "", 0, callback_link_tools);
+  console.defineCommand("spi",         '\0', ParsingConsole::tcodes_str_3, "SPI debug.", "", 1, callback_spi_debug);
+  console.defineCommand("i2c",         '\0', ParsingConsole::tcodes_str_4, "I2C tools", "i2c <bus> <action> [addr]", 1, callback_i2c_tools);
 
   console.defineCommand("homeostasis", 'h',  ParsingConsole::tcodes_str_4, "Homeostasis parameters", "", 0, callback_homeostasis_tool);
   console.defineCommand("disp",        'd',  ParsingConsole::tcodes_str_4, "Display test", "", 0, callback_display_test);
@@ -1547,8 +1468,6 @@ void app_main() {
   console.defineCommand("fan",         'f',  ParsingConsole::tcodes_str_3, "Fan tools", "", 0, callback_fan_tools);
   console.defineCommand("pump",        'p',  ParsingConsole::tcodes_str_3, "Pump tools", "", 0, callback_pump_tools);
   console.defineCommand("tec",         't',  ParsingConsole::tcodes_str_3, "TEC tools", "", 0, callback_tec_tools);
-  console.defineCommand("i2c",         '\0', ParsingConsole::tcodes_str_4, "I2C tools", "i2c <bus> <action> [addr]", 1, callback_i2c_tools);
-  console.defineCommand("spi",         '\0', ParsingConsole::tcodes_str_3, "SPI debug.", "", 1, callback_spi_debug);
 
   console.init();
 
