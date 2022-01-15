@@ -14,33 +14,9 @@ extern "C" {
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/event_groups.h"
-
-#include "esp32/rom/ets_sys.h"
-#include "soc/dport_reg.h"
-#include "soc/io_mux_reg.h"
-#include "soc/rtc_cntl_reg.h"
-#include "soc/gpio_reg.h"
-#include "soc/gpio_sig_map.h"
-#include "driver/gpio.h"
-#include "driver/spi_master.h"
-
-#include "esp_system.h"
-#include "esp_log.h"
-#include "esp_attr.h"
-#include "esp_sleep.h"
-#include "nvs_flash.h"
-
-#include "esp_task_wdt.h"
-#include "esp_err.h"
-#include "esp_event.h"
-#include "esp_eth.h"
 
 //#include "esp_ota_ops.h"
 //#include "esp_flash_partitions.h"
-#include "esp_partition.h"
 #include "esp_http_client.h"
 #include "mqtt_client.h"
 
@@ -1244,14 +1220,17 @@ int callback_spi_debug(StringBuilder* text_return, StringBuilder* args) {
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "queue")) {
         uint8_t arg2 = (uint8_t) args->position_as_int(2);
-        spi_bus.printWorkQueue(text_return, strict_max((uint8_t) 3, arg2));
+        b_ptr->printWorkQueue(text_return, strict_max((uint8_t) 3, arg2));
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "purge")) {
-        text_return->concatf("SPI%u purge_queued_work()\n", arg0);
+        text_return->concatf("SPI%u purge_current_job()\n", arg0);
+        b_ptr->purge_current_job();
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "ragepurge")) {
         text_return->concatf("SPI%u purge_queued_work()\n", arg0);
         text_return->concatf("SPI%u purge_current_job()\n", arg0);
+        b_ptr->purge_queued_work();
+        b_ptr->purge_current_job();
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "verbosity")) {
         if (2 < args->count()) {
@@ -1286,9 +1265,12 @@ int callback_i2c_tools(StringBuilder* text_return, StringBuilder* args) {
   }
   if (nullptr != bus) {
     if (0 == StringBuilder::strcasecmp(cmd, "purge")) {
+      text_return->concatf("I2C%u purge_current_job()\n", bus_id);
       bus->purge_current_job();
     }
     else if (0 == StringBuilder::strcasecmp(cmd, "ragepurge")) {
+      text_return->concatf("I2C%u purge_queued_work()\n", bus_id);
+      text_return->concatf("I2C%u purge_current_job()\n", bus_id);
       bus->purge_queued_work();
       bus->purge_current_job();
     }
@@ -1335,6 +1317,23 @@ int callback_sensor_tools(StringBuilder* text_return, StringBuilder* args) {
         default:
           break;
       }
+    }
+  }
+  else if (0 == StringBuilder::strcasecmp(cmd, "init")) {
+    if (1 < args->count()) {
+      int8_t ret_local = 0;
+      int arg1 = args->position_as_int(1);
+      switch (arg1) {
+        case 0:   ret = baro.init();             break;
+        case 1:   ret = temp_sensor_m.init();    break;
+        case 2:   ret = temp_sensor_0.init();    break;
+        case 3:   ret = temp_sensor_1.init();    break;
+        case 4:   ret = temp_sensor_2.init();    break;
+        case 5:   ret = temp_sensor_3.init();    break;
+        default:
+          break;
+      }
+      text_return->concatf("Sensor init returned %d.\n", ret_local);
     }
   }
   else {
