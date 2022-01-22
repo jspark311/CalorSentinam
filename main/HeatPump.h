@@ -54,8 +54,6 @@
 #define SX8634_IRQ_PIN      36   // INPUT (Needs pullup)
 #define TEMP_M_ALERT_PIN    39   // INPUT (Needs pullup)
 
-
-
 /* SX1503 GPIO pins */
 // 5V power domain. All outputs default to a condition "disabled".
 #define AUX0_ENABLE_PIN      0  // Reserved for relays, fans, etc.
@@ -77,7 +75,6 @@
 #define CIRCUIT_CONF1_PIN   14  // Used to tell firmware about the heat circuit.
 #define CIRCUIT_CONF2_PIN   15  // Used to tell firmware about the heat circuit.
 
-
 /* SX8634 GPIO pins */
 #define LED_TOUCH_PIN        0
 #define LED_ERROR_PIN        1
@@ -85,7 +82,6 @@
 #define LED_PUMP_PIN         3
 #define LED_TEC_PIN          4
 #define VIBRATOR_PIN         7
-
 
 /* Our thermal flow model needs some parameters of the machine. */
 #define MASS_OF_EXCHANGER         250.0f     // Grams
@@ -102,7 +98,16 @@
 #define TACH_IDX_PUMP0    3
 #define TACH_IDX_PUMP1    4
 
+// Indicies for arrays that hold temperature histories.
+#define TMP_SENSE_IDX_H_BRIDGE  0  // The temperature of the H-bridge.
+#define TMP_SENSE_IDX_EXT_AFF   1  // External loop afferent flow temperature.
+#define TMP_SENSE_IDX_EXT_EFF   2  // External loop efferent flow temperature.
+#define TMP_SENSE_IDX_INT_AFF   3  // Internal loop afferent flow temperature.
+#define TMP_SENSE_IDX_INT_EFF   4  // Internal loop efferent flow temperature.
+#define TMP_SENSE_IDX_AIR       5  // Temperature data from the barometer.
+
 #define RELAY_IDX_TEC_SUPPLY         0   // The first relay is the TEC supply.
+#define RELAY_IDX_AUX_OUTLET         1   // The second relay is the AUX outlet.
 
 // What are the fans rated for?
 #define RPM_RADIATOR_FAN0_RATING  1700   // What are the fans rated for?
@@ -110,7 +115,6 @@
 #define RPM_RADIATOR_FAN2_RATING  1700   // What are the fans rated for?
 #define RPM_PUMP0_RATING          1000   // What are the pumps rated for?
 #define RPM_PUMP1_RATING          1000   // What are the pumps rated for?
-
 
 
 /*******************************************************************************
@@ -140,7 +144,6 @@
 #define GRAPH_FLAG_DRAW_TICKS_V             0x80000000   //
 
 
-
 /*******************************************************************************
 * Types
 *******************************************************************************/
@@ -166,6 +169,38 @@ enum class DataVis : uint8_t {
   TEXT        // Prefer alphanumeric readout.
 };
 
+
+/*******************************************************************************
+* Externs to hardware resources
+*******************************************************************************/
+
+/**
+* Homeostasis state machine positions
+* ------------------------------------------------------------------------------
+* \dot
+*   digraph statemachine {
+*     node [shape=record, fontname=Helvetica, fontsize=10];
+*     BOOT         [ label="System Setup"     style="rounded,filled" ];
+*     IDLE         [ label="Idle"             fillcolor="green"  style="rounded,filled" ];
+*     PROG_RUNNING [ label="Program Running"  fillcolor="green"  style="rounded,filled" ];
+*     FAULT        [ label="Fault"            fillcolor="red"    style="rounded,filled" ];
+*
+*     BOOT         -> IDLE          [ label ="Self-diagnostics pass", arrowhead="open", style="solid" ];
+*     BOOT         -> FAULT         [ label ="Self-diagnostics fail", arrowhead="open", style="solid" ];
+*     IDLE         -> PROG_RUNNING  [ label ="Homeostatic program initiated", arrowhead="open", style="solid" ];
+*     IDLE         -> FAULT         [ label ="Fault detected", arrowhead="open", style="dashed" ];
+*     PROG_RUNNING -> IDLE          [ label ="Homeostatic program complete", arrowhead="open", style="dashed" ];
+*     PROG_RUNNING -> FAULT         [ label ="Fault detected", arrowhead="open", style="dashed" ];
+*     FAULT        -> BOOT          [ label ="System reboot", arrowhead="open", style="dashed" ];
+*   }
+* \enddot
+*/
+enum class HomeostasisFSM : uint8_t {
+  BOOT = 0,
+  IDLE,
+  PROG_RUNNING,
+  FAULT
+};
 
 /*
 * Homeostatic parameters. All temperatures are in Celcius.
@@ -205,6 +240,9 @@ class HomeostasisParams {
     bool     conf_sw2_staged_tec_banks  = false;    // The TEC banks are configured for maximum delta.
 
     void printDebug(StringBuilder*);
+    int8_t console_handler(StringBuilder* text_return, StringBuilder* args);
+
+    static const char* fsmToStr(const HomeostasisFSM);
 };
 
 
@@ -261,6 +299,8 @@ extern SensorFilter<uint16_t> pump_speed_1;
 * Function prototypes
 *******************************************************************************/
 int8_t init_sensor_memory();
+SensorFilter<float>* getTemperatureFilter(uint8_t idx);
+
 void ledOn(uint8_t idx, uint32_t duration, uint16_t intensity = 3500);
 void timeoutCheckVibLED();
 const char* const getSensorIDString(const SensorID);
@@ -277,6 +317,8 @@ bool   tec_reversed(const uint8_t bank_id);
 /* Top-level pump control */
 int8_t pump_powered(const uint8_t pump_id, bool en);
 bool   pump_powered(const uint8_t pump_id);
+
+int8_t report_fault_condition(int8_t);
 
 
 /* Display helper routines */

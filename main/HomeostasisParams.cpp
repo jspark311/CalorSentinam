@@ -23,3 +23,39 @@ void HomeostasisParams::printDebug(StringBuilder* output) {
   output->concatf("\t\tAllow sub-zero temps:     %c\n", conf_sw1_enable_subzero   ? 'y' : 'n');
   output->concatf("\t\tTEC banks staged:         %c\n", conf_sw2_staged_tec_banks ? 'y' : 'n');
 };
+
+
+const char* HomeostasisParams::fsmToStr(const HomeostasisFSM e) {
+  switch (e) {
+    case HomeostasisFSM::BOOT:          return "BOOT";
+    case HomeostasisFSM::IDLE:          return "IDLE";
+    case HomeostasisFSM::PROG_RUNNING:  return "PROG_RUNNING";
+    case HomeostasisFSM::FAULT:         return "FAULT";
+  }
+  return "<UNKNOWN>";
+}
+
+
+
+/*******************************************************************************
+* Console callback
+* These are built-in handlers for using this instance via a console.
+*******************************************************************************/
+
+int8_t HomeostasisParams::console_handler(StringBuilder* text_return, StringBuilder* args) {
+  int ret = 0;
+  if (0 < args->count()) {
+    char* cmd = args->position_trimmed(0);
+
+    if (0 == StringBuilder::strcasecmp(cmd, "info")) {
+      printDebug(text_return);
+    }
+
+    else if (0 == StringBuilder::strcasecmp(cmd, "state")) {
+    }
+    else ret = -1;
+  }
+  else ret = -1;
+
+  return ret;
+}

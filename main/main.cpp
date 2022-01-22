@@ -203,7 +203,7 @@ uint8_t  tach_fails[5]     = {0, 0, 0, 0, 0};    // Successive tachometer failur
 
 volatile static uint32_t tach_counters[5] = {0, 0, 0, 0, 0};
 
-
+HomeostasisFSM homeostate = HomeostasisFSM::BOOT;
 
 
 /*******************************************************************************
@@ -267,6 +267,16 @@ void update_tach_values() {
     }
     last_tach_check = now;
   }
+}
+
+
+int8_t report_fault_condition(int8_t fault) {
+  int8_t ret = 0;
+  tec_powered(0, false);
+  tec_powered(1, false);
+  tec_safety(true);
+  ESP_LOGE(TAG, "Homeostate fault: %d\n", ret);
+  return ret;
 }
 
 
@@ -952,6 +962,10 @@ int callback_display_test(StringBuilder* text_return, StringBuilder* args) {
   return display.console_handler(text_return, args);
 }
 
+int callback_homeostasis_tool(StringBuilder* text_return, StringBuilder* args) {
+  return homeostasis.console_handler(text_return, args);
+}
+
 int callback_sx1503_test(StringBuilder* text_return, StringBuilder* args) {
   int ret = -1;
   char* cmd = args->position_trimmed(0);
@@ -1012,20 +1026,6 @@ int callback_i2c_tools(StringBuilder* text_return, StringBuilder* args) {
         text_return->concatf("Unsupported bus: %d\n", bus_id);
         break;
     }
-  }
-  return ret;
-}
-
-
-
-int callback_homeostasis_tool(StringBuilder* text_return, StringBuilder* args) {
-  int ret = 0;
-  char* cmd = args->position_trimmed(0);
-
-  if (0 == StringBuilder::strcasecmp(cmd, "init")) {
-  }
-  else {
-    homeostasis.printDebug(text_return);
   }
   return ret;
 }
@@ -1299,6 +1299,63 @@ int callback_tec_tools(StringBuilder* text_return, StringBuilder* args) {
 extern "C" {
 #endif
 
+/*******************************************************************************
+* Support functions                                                            *
+*******************************************************************************/
+
+int8_t test_homeostasis_program() {
+  int8_t ret = 0;
+  HomeostasisFSM prior_state = homeostate;
+  if (HomeostasisFSM::PROG_RUNNING == homeostate) {
+    bool orderly_return_to_idle = false;
+    for (uint8_t i = 0; i < 6; i++) {    // Cycle through each temperature sensor, checking the values.
+      SensorFilter<float>* filter = getTemperatureFilter(i);
+      float current_temp = filter->value();
+
+      switch (i) {
+        case TMP_SENSE_IDX_H_BRIDGE:
+          ret = (current_temp <= homeostasis.temperature_max_h_bridge) ? 0 : -1;
+          break;
+
+        case TMP_SENSE_IDX_EXT_AFF:
+          break;
+        case TMP_SENSE_IDX_EXT_EFF:
+          break;
+
+        case TMP_SENSE_IDX_INT_AFF:
+        case TMP_SENSE_IDX_INT_EFF:
+          if ((current_temp < homeostasis.temperature_min_internal_loop) | (current_temp > homeostasis.temperature_max_internal_loop)) {
+            ret = -1;
+          }
+          else {
+            ret = 0;
+          }
+          break;
+        case TMP_SENSE_IDX_AIR:
+          ret = (current_temp >= homeostasis.temperature_max_air) ? 0 : -1;
+          break;
+      }
+      if (0 != ret) {
+        homeostate = HomeostasisFSM::FAULT;
+        report_fault_condition(ret);
+        return ret;
+      }
+    }
+
+    if (orderly_return_to_idle) {
+      // TODO: Shut down the TECs, and (optionally) the AUX outlet.
+      tec_powered(0, false);
+      tec_powered(1, false);
+      homeostate = HomeostasisFSM::IDLE;
+    }
+  }
+
+  if (prior_state != homeostate) {
+    ESP_LOGI(TAG, "Homeostate moved (%s --> %s)\n", HomeostasisParams::fsmToStr(prior_state), HomeostasisParams::fsmToStr(homeostate));
+  }
+  return ret;
+}
+
 
 /*******************************************************************************
 * Main function and threads                                                    *
@@ -1367,6 +1424,7 @@ void manuvr_task(void* pvParameter) {
     }
 
     update_tach_values();
+    test_homeostasis_program();
 
     uint32_t millis_now = millis();
     if ((last_interaction + 100000) <= millis_now) {
@@ -1459,8 +1517,8 @@ void app_main() {
   console.defineCommand("link",        'l',  ParsingConsole::tcodes_str_4, "Linked device tools.", "", 0, callback_link_tools);
   console.defineCommand("spi",         '\0', ParsingConsole::tcodes_str_3, "SPI debug.", "", 1, callback_spi_debug);
   console.defineCommand("i2c",         '\0', ParsingConsole::tcodes_str_4, "I2C tools", "i2c <bus> <action> [addr]", 1, callback_i2c_tools);
-
   console.defineCommand("homeostasis", 'h',  ParsingConsole::tcodes_str_4, "Homeostasis parameters", "", 0, callback_homeostasis_tool);
+
   console.defineCommand("disp",        'd',  ParsingConsole::tcodes_str_4, "Display test", "", 0, callback_display_test);
   console.defineCommand("app",         'a',  ParsingConsole::tcodes_str_4, "Select active application.", "", 0, callback_active_app);
   console.defineCommand("sensor",      's',  ParsingConsole::tcodes_str_4, "Sensor tools", "", 0, callback_sensor_tools);
