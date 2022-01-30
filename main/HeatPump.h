@@ -65,11 +65,11 @@
 #define TEC_BANK1_P_PIN      6  // H-bridge control
 #define TEC_BANK1_N_PIN      7  // H-bridge control
 
-// 3V3 power domain.
-#define DEBUG_LED_0_PIN      8  // Status output
-#define DEBUG_LED_1_PIN      9  // Status output
-#define DEBUG_LED_2_PIN     10  // Status output
-#define DEBUG_LED_3_PIN     11  // Status output
+// 5V power domain.
+#define TEC_BANK0_A_P_PIN    8  // H-bridge control
+#define TEC_BANK0_A_N_PIN    9  // H-bridge control
+#define TEC_BANK1_B_P_PIN   10  // H-bridge control
+#define TEC_BANK1_B_N_PIN   11  // H-bridge control
 #define RESERVED_IN_0_PIN   12  //
 #define RESERVED_IN_1_PIN   13  //
 #define CIRCUIT_CONF1_PIN   14  // Used to tell firmware about the heat circuit.
@@ -82,6 +82,9 @@
 #define LED_PUMP_PIN         3
 #define LED_TEC_PIN          4
 #define VIBRATOR_PIN         7
+
+/* H-bridge operational parameters */
+#define H_BRIDGE_DEADBAND_MS    500  // How many millis between "break" and "make"?
 
 /* Our thermal flow model needs some parameters of the machine. */
 #define MASS_OF_EXCHANGER         250.0f     // Grams

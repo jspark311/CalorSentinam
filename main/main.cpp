@@ -32,6 +32,7 @@ extern "C" {
 #endif
 
 
+#define DEFAULT_SCAN_LIST_SIZE  16
 /* OTA parameters that probably ought to be imparted at provisioning. */
 #define EXAMPLE_SERVER_URL "ian-app.home.joshianlindsay.com"
 //extern const uint8_t server_cert_pem_start[] asm("_binary_ca_cert_pem_start");
@@ -197,7 +198,9 @@ uint32_t boot_time         = 0;      // millis() at boot.
 uint32_t config_time       = 0;      // millis() at end of setup().
 uint32_t last_interaction  = 0;      // millis() when the user last interacted.
 uint32_t last_tach_check   = 0;      // millis() when the last tach check happened.
+uint32_t last_tec_change   = 0;      // millis() when the H-bridge was last changed.
 float    fan_pwm_ratio     = 0.0;
+
 
 uint8_t  tach_fails[5]     = {0, 0, 0, 0, 0};    // Successive tachometer failures.
 
@@ -321,6 +324,7 @@ void sx1503_callback_fxn(uint8_t pin, uint8_t level) {
       homeostasis.conf_sw2_staged_tec_banks  = (0 == level);
       break;
     default:
+      last_tec_change = millis();
       break;
   }
 }
@@ -1300,7 +1304,110 @@ extern "C" {
 #endif
 
 /*******************************************************************************
-* Support functions                                                            *
+* Wifi utilities
+*******************************************************************************/
+
+static void print_auth_mode(int authmode) {
+  switch (authmode) {
+    case WIFI_AUTH_OPEN:
+    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_OPEN");
+    break;
+    case WIFI_AUTH_WEP:
+    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WEP");
+    break;
+    case WIFI_AUTH_WPA_PSK:
+    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA_PSK");
+    break;
+    case WIFI_AUTH_WPA2_PSK:
+    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_PSK");
+    break;
+    case WIFI_AUTH_WPA_WPA2_PSK:
+    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA_WPA2_PSK");
+    break;
+    case WIFI_AUTH_WPA2_ENTERPRISE:
+    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_ENTERPRISE");
+    break;
+    case WIFI_AUTH_WPA3_PSK:       ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA3_PSK");        break;
+    //case WIFI_AUTH_WPA2_WPA3_PSK:  ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_WPA3_PSK");   break;
+    default:    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_UNKNOWN");    break;
+  }
+}
+
+static void print_cipher_type(int pairwise_cipher, int group_cipher) {
+  switch (pairwise_cipher) {
+    case WIFI_CIPHER_TYPE_NONE:
+    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_NONE");
+    break;
+    case WIFI_CIPHER_TYPE_WEP40:
+    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_WEP40");
+    break;
+    case WIFI_CIPHER_TYPE_WEP104:
+    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_WEP104");
+    break;
+    case WIFI_CIPHER_TYPE_TKIP:
+    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_TKIP");
+    break;
+    case WIFI_CIPHER_TYPE_CCMP:
+    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_CCMP");
+    break;
+    case WIFI_CIPHER_TYPE_TKIP_CCMP:
+    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_TKIP_CCMP");
+    break;
+    default:
+    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_UNKNOWN");
+    break;
+  }
+
+  switch (group_cipher) {
+    case WIFI_CIPHER_TYPE_NONE:
+    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_NONE");
+    break;
+    case WIFI_CIPHER_TYPE_WEP40:
+    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_WEP40");
+    break;
+    case WIFI_CIPHER_TYPE_WEP104:
+    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_WEP104");
+    break;
+    case WIFI_CIPHER_TYPE_TKIP:
+    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_TKIP");
+    break;
+    case WIFI_CIPHER_TYPE_CCMP:
+    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_CCMP");
+    break;
+    case WIFI_CIPHER_TYPE_TKIP_CCMP:
+    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_TKIP_CCMP");
+    break;
+    default:
+    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_UNKNOWN");
+    break;
+  }
+}
+
+/* Initialize Wi-Fi as sta and set scan method */
+static void wifi_scan() {
+  uint16_t number = DEFAULT_SCAN_LIST_SIZE;
+  wifi_ap_record_t ap_info[DEFAULT_SCAN_LIST_SIZE];
+  uint16_t ap_count = 0;
+  memset(ap_info, 0, sizeof(ap_info));
+
+  esp_wifi_scan_start(NULL, true);
+  ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
+  ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
+  ESP_LOGI(TAG, "Total APs scanned = %u", ap_count);
+  for (int i = 0; (i < DEFAULT_SCAN_LIST_SIZE) && (i < ap_count); i++) {
+    ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
+    ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
+    print_auth_mode(ap_info[i].authmode);
+    if (ap_info[i].authmode != WIFI_AUTH_WEP) {
+      print_cipher_type(ap_info[i].pairwise_cipher, ap_info[i].group_cipher);
+    }
+    ESP_LOGI(TAG, "Channel \t\t%d\n", ap_info[i].primary);
+  }
+}
+
+
+/*******************************************************************************
+* Support functions
 *******************************************************************************/
 
 int8_t test_homeostasis_program() {
@@ -1426,6 +1533,9 @@ void manuvr_task(void* pvParameter) {
     update_tach_values();
     test_homeostasis_program();
 
+    if (H_BRIDGE_DEADBAND_MS <= wrap_accounted_delta(millis(), last_tec_change)) {
+    }
+
     uint32_t millis_now = millis();
     if ((last_interaction + 100000) <= millis_now) {
       // After 100 seconds, time-out the display.
@@ -1479,17 +1589,6 @@ void app_main() {
     // //esp_partition_get_sha256(esp_ota_get_running_partition(), sha_256);
     // print_sha256(sha_256, "SHA-256 for current firmware: ");
 
-    // Initialize NVS.
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      // OTA app partition table has a smaller NVS partition size than the non-OTA
-      // partition table. This size mismatch may cause NVS initialization to fail.
-      // If this happens, we erase NVS partition and initialize NVS again.
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(err);
-
   // Top-level pin responsibilities.
   pinMode(FAN0_TACH_PIN,  GPIOMode::INPUT_PULLUP);
   pinMode(FAN1_TACH_PIN,  GPIOMode::INPUT_PULLUP);
@@ -1514,12 +1613,12 @@ void app_main() {
   platform.configureConsole(&console);
   console.defineCommand("sx",          '\0', ParsingConsole::tcodes_str_4, "SX1503 test", "", 0, callback_sx1503_test);
   console.defineCommand("touch",       '\0', ParsingConsole::tcodes_str_4, "SX8634 tools", "", 0, callback_touch_tools);
+  console.defineCommand("disp",        'd',  ParsingConsole::tcodes_str_4, "Display test", "", 0, callback_display_test);
   console.defineCommand("link",        'l',  ParsingConsole::tcodes_str_4, "Linked device tools.", "", 0, callback_link_tools);
   console.defineCommand("spi",         '\0', ParsingConsole::tcodes_str_3, "SPI debug.", "", 1, callback_spi_debug);
   console.defineCommand("i2c",         '\0', ParsingConsole::tcodes_str_4, "I2C tools", "i2c <bus> <action> [addr]", 1, callback_i2c_tools);
   console.defineCommand("homeostasis", 'h',  ParsingConsole::tcodes_str_4, "Homeostasis parameters", "", 0, callback_homeostasis_tool);
 
-  console.defineCommand("disp",        'd',  ParsingConsole::tcodes_str_4, "Display test", "", 0, callback_display_test);
   console.defineCommand("app",         'a',  ParsingConsole::tcodes_str_4, "Select active application.", "", 0, callback_active_app);
   console.defineCommand("sensor",      's',  ParsingConsole::tcodes_str_4, "Sensor tools", "", 0, callback_sensor_tools);
   console.defineCommand("filter",      '\0', ParsingConsole::tcodes_str_3, "Sensor filter info.", "", 0, callback_sensor_filter_info);
@@ -1572,10 +1671,21 @@ void app_main() {
   //setPinFxn(PUMP0_TACH_PIN, IRQCondition::FALLING, isr_pump0_tach_fxn);
   //setPinFxn(PUMP1_TACH_PIN, IRQCondition::FALLING, isr_pump1_tach_fxn);
 
+  // Setup Wifi peripheral in station mode.
+  ESP_ERROR_CHECK(esp_netif_init());
+  ESP_ERROR_CHECK(esp_event_loop_create_default());
+  esp_netif_t* sta_netif = esp_netif_create_default_wifi_sta();
+  assert(sta_netif);
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+  ESP_ERROR_CHECK(esp_wifi_start());
+
   // Spawn worker threads, note the time, and terminate thread.
   xTaskCreate(manuvr_task, "_manuvr", 32768, NULL, (tskIDLE_PRIORITY), NULL);
   //xTaskCreate(&ota_task, "ota_task", 8192, NULL, 5, NULL);
   config_time = millis();
+  wifi_scan();
 }
 
 #ifdef __cplusplus
