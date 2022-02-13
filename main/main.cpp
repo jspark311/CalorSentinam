@@ -42,8 +42,6 @@ extern "C" {
 /*******************************************************************************
 * Globals
 *******************************************************************************/
-
-
 esp_mqtt_client_handle_t client = nullptr;
 
 static bool connected_have_ip   = false;
@@ -278,7 +276,7 @@ int8_t report_fault_condition(int8_t fault) {
   tec_powered(0, false);
   tec_powered(1, false);
   tec_safety(true);
-  ESP_LOGE(TAG, "Homeostate fault: %d\n", ret);
+  c3p_log(LOG_LEV_CRIT, TAG, "Homeostate fault: %d\n", ret);
   return ret;
 }
 
@@ -695,48 +693,48 @@ static int mqtt_event_handler(esp_mqtt_event_t* event) {
   // your_context_t *context = event->context;
   switch (event->event_id) {
     case MQTT_EVENT_CONNECTED:
-      ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
+      c3p_log(LOG_LEV_INFO, TAG, "MQTT_EVENT_CONNECTED");
       connected_mqtt = true;
       msg_id = esp_mqtt_client_subscribe(client, "/theta/circuit2", 0);
-      ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+      c3p_log(LOG_LEV_INFO, TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
       msg_id = esp_mqtt_client_subscribe(client, "/theta/circuit5", 0);
-      ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+      c3p_log(LOG_LEV_INFO, TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
       msg_id = esp_mqtt_client_subscribe(client, "/theta/circuit4", 0);
-      ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+      c3p_log(LOG_LEV_INFO, TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
       msg_id = esp_mqtt_client_subscribe(client, "/theta/circuit3", 0);
-      ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+      c3p_log(LOG_LEV_INFO, TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
       msg_id = esp_mqtt_client_subscribe(client, "/theta/circuit1", 0);
-      ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+      c3p_log(LOG_LEV_INFO, TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
       msg_id = esp_mqtt_client_subscribe(client, "/theta/circuit0", 0);
-      ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+      c3p_log(LOG_LEV_INFO, TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
       msg_id = esp_mqtt_client_subscribe(client, "/theta/color", 0);
       //msg_id = esp_mqtt_client_subscribe(client, "#", 0);
 
       //msg_id = esp_mqtt_client_unsubscribe(client, "/topic/qos1");
-      //ESP_LOGI(TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
+      //c3p_log(LOG_LEV_INFO, TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
       break;
 
     case MQTT_EVENT_DISCONNECTED:
       connected_mqtt = false;
-      ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+      c3p_log(LOG_LEV_INFO, TAG, "MQTT_EVENT_DISCONNECTED");
       break;
 
     case MQTT_EVENT_SUBSCRIBED:
-      ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
+      c3p_log(LOG_LEV_INFO, TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
       break;
 
     case MQTT_EVENT_UNSUBSCRIBED:
-      ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
+      c3p_log(LOG_LEV_INFO, TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
       break;
 
     case MQTT_EVENT_PUBLISHED:
-      ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
+      c3p_log(LOG_LEV_INFO, TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
       break;
 
     case MQTT_EVENT_DATA:
@@ -754,10 +752,10 @@ static int mqtt_event_handler(esp_mqtt_event_t* event) {
       break;
 
     case MQTT_EVENT_ERROR:
-      ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
+      c3p_log(LOG_LEV_INFO, TAG, "MQTT_EVENT_ERROR");
       break;
     default:
-      ESP_LOGI(TAG, "MQTT_EVENT Default case");
+      c3p_log(LOG_LEV_INFO, TAG, "MQTT_EVENT Default case");
       break;
   }
   return ESP_OK;
@@ -794,7 +792,7 @@ void mqtt_send_temperature() {
 //
 //
 // static void __attribute__((noreturn)) task_fatal_error() {
-//   ESP_LOGE(TAG, "Exiting task due to fatal error...");
+//   c3p_log(LOG_LEV_ERROR, TAG, "Exiting task due to fatal error...");
 //   (void)vTaskDelete(NULL);
 //   while (1) {}
 // }
@@ -807,22 +805,22 @@ void mqtt_send_temperature() {
 //   /* update handle : set by esp_ota_begin(), must be freed via esp_ota_end() */
 //   esp_ota_handle_t update_handle = 0;
 //   const esp_partition_t *update_partition = NULL;
-//   ESP_LOGI(TAG, "Starting OTA service thread...");
+//   c3p_log(LOG_LEV_INFO, TAG, "Starting OTA service thread...");
 //
 //   const esp_partition_t* configured = esp_ota_get_boot_partition();
 //   const esp_partition_t* running = esp_ota_get_running_partition();
 //
 //     if (configured != running) {
-//       ESP_LOGW(TAG, "Configured OTA boot partition at offset 0x%08x, but running from offset 0x%08x", configured->address, running->address);
-//       ESP_LOGW(TAG, "(This can happen if either the OTA boot data or preferred boot image become corrupted somehow.)");
+//       c3p_log(LOG_LEV_WARN, TAG, "Configured OTA boot partition at offset 0x%08x, but running from offset 0x%08x", configured->address, running->address);
+//       c3p_log(LOG_LEV_WARN, TAG, "(This can happen if either the OTA boot data or preferred boot image become corrupted somehow.)");
 //     }
-//     ESP_LOGI(TAG, "Running partition type %d subtype %d (offset 0x%08x)", running->type, running->subtype, running->address);
+//     c3p_log(LOG_LEV_INFO, TAG, "Running partition type %d subtype %d (offset 0x%08x)", running->type, running->subtype, running->address);
 //
 //     /* Wait for the callback to set the CONNECTED_BIT in the event group. */
 //     while (!connected_have_ip) {
 //       vTaskDelay(1000 / portTICK_PERIOD_MS);
 //     }
-//     ESP_LOGI(TAG, "Checking for firmware update...");
+//     c3p_log(LOG_LEV_INFO, TAG, "Checking for firmware update...");
 //
 //     esp_http_client_config_t config;
 //     memset((void*) &config, 0, sizeof(config));
@@ -832,35 +830,35 @@ void mqtt_send_temperature() {
 //
 //     esp_http_client_handle_t client = esp_http_client_init(&config);
 //     if (client == NULL) {
-//         ESP_LOGE(TAG, "Failed to initialise HTTP connection");
+//         c3p_log(LOG_LEV_ERROR, TAG, "Failed to initialise HTTP connection");
 //         task_fatal_error();
 //     }
 //     err = esp_http_client_open(client, 0);
 //     if (err != ESP_OK) {
-//         ESP_LOGE(TAG, "Failed to open HTTP connection: %s", esp_err_to_name(err));
+//         c3p_log(LOG_LEV_ERROR, TAG, "Failed to open HTTP connection: %s", esp_err_to_name(err));
 //         esp_http_client_cleanup(client);
 //         task_fatal_error();
 //     }
 //     esp_http_client_fetch_headers(client);
 //
 //     update_partition = esp_ota_get_next_update_partition(NULL);
-//     ESP_LOGI(TAG, "Writing to partition subtype %d at offset 0x%x", update_partition->subtype, update_partition->address);
+//     c3p_log(LOG_LEV_INFO, TAG, "Writing to partition subtype %d at offset 0x%x", update_partition->subtype, update_partition->address);
 //     assert(update_partition != NULL);
 //
 //     err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &update_handle);
 //     if (err != ESP_OK) {
-//         ESP_LOGE(TAG, "esp_ota_begin failed (%s)", esp_err_to_name(err));
+//         c3p_log(LOG_LEV_ERROR, TAG, "esp_ota_begin failed (%s)", esp_err_to_name(err));
 //         http_cleanup(client);
 //         task_fatal_error();
 //     }
-//     ESP_LOGI(TAG, "esp_ota_begin succeeded");
+//     c3p_log(LOG_LEV_INFO, TAG, "esp_ota_begin succeeded");
 //
 //     int binary_file_length = 0;
 //     /*deal with all receive packet*/
 //     while (1) {
 //       int data_read = esp_http_client_read(client, ota_write_data, sizeof(ota_write_data)-1);
 //       if (data_read < 0) {
-//         ESP_LOGE(TAG, "Error: SSL data read error");
+//         c3p_log(LOG_LEV_ERROR, TAG, "Error: SSL data read error");
 //         http_cleanup(client);
 //         task_fatal_error();
 //       }
@@ -868,42 +866,42 @@ void mqtt_send_temperature() {
 //         err = esp_ota_write( update_handle, (const void *)ota_write_data, data_read);
 //         if (err != ESP_OK) {
 //           http_cleanup(client);
-//           ESP_LOGE(TAG, "Failed to write OTA image: %s", esp_err_to_name(err));
+//           c3p_log(LOG_LEV_ERROR, TAG, "Failed to write OTA image: %s", esp_err_to_name(err));
 //           task_fatal_error();
 //         }
 //         binary_file_length += data_read;
-//         ESP_LOGD(TAG, "Written image length %d", binary_file_length);
+//         c3p_log(LOG_LEV_INFO, TAG, "Written image length %d", binary_file_length);
 //       }
 //       else if (data_read == 0) {
-//         ESP_LOGI(TAG, "Connection closed,all data received");
+//         c3p_log(LOG_LEV_INFO, TAG, "Connection closed,all data received");
 //         break;
 //       }
 //     }
-//     ESP_LOGI(TAG, "Total Write binary data length : %d", binary_file_length);
+//     c3p_log(LOG_LEV_INFO, TAG, "Total Write binary data length : %d", binary_file_length);
 //
 //     if (esp_ota_end(update_handle) != ESP_OK) {
-//         ESP_LOGE(TAG, "esp_ota_end failed!");
+//         c3p_log(LOG_LEV_ERROR, TAG, "esp_ota_end failed!");
 //         http_cleanup(client);
 //         task_fatal_error();
 //     }
 //
 //     if (esp_partition_check_identity(esp_ota_get_running_partition(), update_partition) == true) {
-//         ESP_LOGI(TAG, "The current running firmware is same as the firmware just downloaded");
+//         c3p_log(LOG_LEV_INFO, TAG, "The current running firmware is same as the firmware just downloaded");
 //         int i = 0;
-//         ESP_LOGI(TAG, "When a new firmware is available on the server, press the reset button to download it");
+//         c3p_log(LOG_LEV_INFO, TAG, "When a new firmware is available on the server, press the reset button to download it");
 //         while(1) {
-//           ESP_LOGI(TAG, "Waiting for a new firmware ... %d", ++i);
+//           c3p_log(LOG_LEV_INFO, TAG, "Waiting for a new firmware ... %d", ++i);
 //           vTaskDelay(2000 / portTICK_PERIOD_MS);
 //         }
 //     }
 //
 //   err = esp_ota_set_boot_partition(update_partition);
 //   if (err != ESP_OK) {
-//     ESP_LOGE(TAG, "esp_ota_set_boot_partition failed (%s)!", esp_err_to_name(err));
+//     c3p_log(LOG_LEV_ERROR, TAG, "esp_ota_set_boot_partition failed (%s)!", esp_err_to_name(err));
 //     http_cleanup(client);
 //     task_fatal_error();
 //   }
-//   ESP_LOGI(TAG, "Prepare to restart system!");
+//   c3p_log(LOG_LEV_INFO, TAG, "Prepare to restart system!");
 //   esp_restart();
 // }
 //
@@ -914,7 +912,7 @@ void mqtt_send_temperature() {
 //   for (int i = 0; i < 32; ++i) {
 //     sprintf(&hash_print[i * 2], "%02x", image_hash[i]);
 //   }
-//   ESP_LOGI(TAG, "%s: %s", label, hash_print);
+//   c3p_log(LOG_LEV_INFO, TAG, "%s: %s", label, hash_print);
 // }
 
 
@@ -1307,81 +1305,45 @@ extern "C" {
 * Wifi utilities
 *******************************************************************************/
 
-static void print_auth_mode(int authmode) {
-  switch (authmode) {
-    case WIFI_AUTH_OPEN:
-    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_OPEN");
-    break;
-    case WIFI_AUTH_WEP:
-    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WEP");
-    break;
-    case WIFI_AUTH_WPA_PSK:
-    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA_PSK");
-    break;
-    case WIFI_AUTH_WPA2_PSK:
-    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_PSK");
-    break;
-    case WIFI_AUTH_WPA_WPA2_PSK:
-    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA_WPA2_PSK");
-    break;
-    case WIFI_AUTH_WPA2_ENTERPRISE:
-    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_ENTERPRISE");
-    break;
-    case WIFI_AUTH_WPA3_PSK:       ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA3_PSK");        break;
-    //case WIFI_AUTH_WPA2_WPA3_PSK:  ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_WPA3_PSK");   break;
-    default:    ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_UNKNOWN");    break;
+void printPeerDescript(StringBuilder* output, wifi_ap_record_t* ap_info) {
+  output->concatf("\n\t[%s]\tRSSI: %d\tCHAN: %d\n", ap_info->ssid, ap_info->rssi, ap_info->primary);
+  output->concat("\t\tAuthmode: ");
+  switch (ap_info->authmode) {
+    case WIFI_AUTH_OPEN:             output->concat("OPEN");             break;
+    case WIFI_AUTH_WEP:              output->concat("WEP");              break;
+    case WIFI_AUTH_WPA_PSK:          output->concat("WPA_PSK");          break;
+    case WIFI_AUTH_WPA2_PSK:         output->concat("WPA2_PSK");         break;
+    case WIFI_AUTH_WPA_WPA2_PSK:     output->concat("WPA_WPA2_PSK");     break;
+    case WIFI_AUTH_WPA2_ENTERPRISE:  output->concat("WPA2_ENTERPRISE");  break;
+    case WIFI_AUTH_WPA3_PSK:         output->concat("WPA3_PSK");         break;
+    //case WIFI_AUTH_WPA2_WPA3_PSK:    output->concat("WPA2_WPA3_PSK");    break;
+    default:    output->concat("WIFI_AUTH_UNKNOWN");    break;
   }
+  if (ap_info->authmode != WIFI_AUTH_WEP) {
+    output->concat("\n\t\tPairwise: ");
+    switch (ap_info->pairwise_cipher) {
+      case WIFI_CIPHER_TYPE_NONE:       output->concat("NONE");      break;
+      case WIFI_CIPHER_TYPE_WEP40:      output->concat("WEP40");     break;
+      case WIFI_CIPHER_TYPE_WEP104:     output->concat("WEP104");    break;
+      case WIFI_CIPHER_TYPE_TKIP:       output->concat("TKIP");      break;
+      case WIFI_CIPHER_TYPE_CCMP:       output->concat("CCMP");      break;
+      case WIFI_CIPHER_TYPE_TKIP_CCMP:  output->concat("TKIP_CCMP"); break;
+      default:                          output->concat("UNKNOWN");   break;
+    }
+    output->concat("\tGroup: ");
+    switch (ap_info->group_cipher) {
+      case WIFI_CIPHER_TYPE_NONE:       output->concat("NONE");      break;
+      case WIFI_CIPHER_TYPE_WEP40:      output->concat("WEP40");     break;
+      case WIFI_CIPHER_TYPE_WEP104:     output->concat("WEP104");    break;
+      case WIFI_CIPHER_TYPE_TKIP:       output->concat("TKIP");      break;
+      case WIFI_CIPHER_TYPE_CCMP:       output->concat("CCMP");      break;
+      case WIFI_CIPHER_TYPE_TKIP_CCMP:  output->concat("TKIP_CCMP"); break;
+      default:                          output->concat("UNKNOWN");   break;
+    }
+  }
+  output->concat("\n");
 }
 
-static void print_cipher_type(int pairwise_cipher, int group_cipher) {
-  switch (pairwise_cipher) {
-    case WIFI_CIPHER_TYPE_NONE:
-    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_NONE");
-    break;
-    case WIFI_CIPHER_TYPE_WEP40:
-    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_WEP40");
-    break;
-    case WIFI_CIPHER_TYPE_WEP104:
-    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_WEP104");
-    break;
-    case WIFI_CIPHER_TYPE_TKIP:
-    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_TKIP");
-    break;
-    case WIFI_CIPHER_TYPE_CCMP:
-    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_CCMP");
-    break;
-    case WIFI_CIPHER_TYPE_TKIP_CCMP:
-    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_TKIP_CCMP");
-    break;
-    default:
-    ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_UNKNOWN");
-    break;
-  }
-
-  switch (group_cipher) {
-    case WIFI_CIPHER_TYPE_NONE:
-    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_NONE");
-    break;
-    case WIFI_CIPHER_TYPE_WEP40:
-    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_WEP40");
-    break;
-    case WIFI_CIPHER_TYPE_WEP104:
-    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_WEP104");
-    break;
-    case WIFI_CIPHER_TYPE_TKIP:
-    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_TKIP");
-    break;
-    case WIFI_CIPHER_TYPE_CCMP:
-    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_CCMP");
-    break;
-    case WIFI_CIPHER_TYPE_TKIP_CCMP:
-    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_TKIP_CCMP");
-    break;
-    default:
-    ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_UNKNOWN");
-    break;
-  }
-}
 
 /* Initialize Wi-Fi as sta and set scan method */
 static void wifi_scan() {
@@ -1393,15 +1355,12 @@ static void wifi_scan() {
   esp_wifi_scan_start(NULL, true);
   ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
   ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
-  ESP_LOGI(TAG, "Total APs scanned = %u", ap_count);
+  c3p_log(LOG_LEV_NOTICE, TAG, "Total APs scanned = %u", ap_count);
+
   for (int i = 0; (i < DEFAULT_SCAN_LIST_SIZE) && (i < ap_count); i++) {
-    ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
-    ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
-    print_auth_mode(ap_info[i].authmode);
-    if (ap_info[i].authmode != WIFI_AUTH_WEP) {
-      print_cipher_type(ap_info[i].pairwise_cipher, ap_info[i].group_cipher);
-    }
-    ESP_LOGI(TAG, "Channel \t\t%d\n", ap_info[i].primary);
+    StringBuilder peer_desc;
+    printPeerDescript(&peer_desc, &ap_info[i]);
+    c3p_log(LOG_LEV_INFO, TAG, &peer_desc);
   }
 }
 
@@ -1458,7 +1417,7 @@ int8_t test_homeostasis_program() {
   }
 
   if (prior_state != homeostate) {
-    ESP_LOGI(TAG, "Homeostate moved (%s --> %s)\n", HomeostasisParams::fsmToStr(prior_state), HomeostasisParams::fsmToStr(homeostate));
+    c3p_log(LOG_LEV_NOTICE, TAG, "Homeostate moved (%s --> %s)\n", HomeostasisParams::fsmToStr(prior_state), HomeostasisParams::fsmToStr(homeostate));
   }
   return ret;
 }
@@ -1552,6 +1511,7 @@ void manuvr_task(void* pvParameter) {
     platform.yieldThread();
   }
 }
+
 
 
 /*******************************************************************************
