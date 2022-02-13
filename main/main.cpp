@@ -1568,27 +1568,6 @@ void app_main() {
   platform_init();
   boot_time = millis();
 
-    // uint8_t sha_256[32] = { 0 };
-    // esp_partition_t partition;
-    //
-    // // get sha256 digest for the partition table
-    // partition.address   = ESP_PARTITION_TABLE_OFFSET;
-    // partition.size      = ESP_PARTITION_TABLE_MAX_LEN;
-    // partition.type      = ESP_PARTITION_TYPE_DATA;
-    // esp_partition_get_sha256(&partition, sha_256);
-    // print_sha256(sha_256, "SHA-256 for the partition table: ");
-    //
-    // // get sha256 digest for bootloader
-    // partition.address   = ESP_BOOTLOADER_OFFSET;
-    // partition.size      = ESP_PARTITION_TABLE_OFFSET;
-    // partition.type      = ESP_PARTITION_TYPE_APP;
-    // esp_partition_get_sha256(&partition, sha_256);
-    // print_sha256(sha_256, "SHA-256 for bootloader: ");
-    //
-    // // get sha256 digest for running partition
-    // //esp_partition_get_sha256(esp_ota_get_running_partition(), sha_256);
-    // print_sha256(sha_256, "SHA-256 for current firmware: ");
-
   // Top-level pin responsibilities.
   pinMode(FAN0_TACH_PIN,  GPIOMode::INPUT_PULLUP);
   pinMode(FAN1_TACH_PIN,  GPIOMode::INPUT_PULLUP);
