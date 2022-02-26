@@ -693,7 +693,7 @@ static int mqtt_event_handler(esp_mqtt_event_t* event) {
   // your_context_t *context = event->context;
   switch (event->event_id) {
     case MQTT_EVENT_CONNECTED:
-      c3p_log(LOG_LEV_INFO, TAG, "MQTT_EVENT_CONNECTED");
+      c3p_log(LOG_LEV_NOTICE, TAG, "MQTT_EVENT_CONNECTED");
       connected_mqtt = true;
       msg_id = esp_mqtt_client_subscribe(client, "/theta/circuit2", 0);
       c3p_log(LOG_LEV_INFO, TAG, "sent subscribe successful, msg_id=%d", msg_id);
@@ -722,7 +722,7 @@ static int mqtt_event_handler(esp_mqtt_event_t* event) {
 
     case MQTT_EVENT_DISCONNECTED:
       connected_mqtt = false;
-      c3p_log(LOG_LEV_INFO, TAG, "MQTT_EVENT_DISCONNECTED");
+      c3p_log(LOG_LEV_NOTICE, TAG, "MQTT_EVENT_DISCONNECTED");
       break;
 
     case MQTT_EVENT_SUBSCRIBED:
@@ -752,10 +752,10 @@ static int mqtt_event_handler(esp_mqtt_event_t* event) {
       break;
 
     case MQTT_EVENT_ERROR:
-      c3p_log(LOG_LEV_INFO, TAG, "MQTT_EVENT_ERROR");
+      c3p_log(LOG_LEV_WARN, TAG, "MQTT_EVENT_ERROR");
       break;
     default:
-      c3p_log(LOG_LEV_INFO, TAG, "MQTT_EVENT Default case");
+      c3p_log(LOG_LEV_WARN, TAG, "MQTT_EVENT Default case");
       break;
   }
   return ESP_OK;
@@ -1519,7 +1519,6 @@ void manuvr_task(void* pvParameter) {
 *******************************************************************************/
 
 void app_main() {
-  //StringBuilder boot_log;
   /*
   * The platform object is created on the stack, but takes no action upon
   *   construction. The first thing that should be done is to call the preinit
@@ -1557,13 +1556,13 @@ void app_main() {
   console.defineCommand("spi",         '\0', ParsingConsole::tcodes_str_3, "SPI debug.", "", 1, callback_spi_debug);
   console.defineCommand("i2c",         '\0', ParsingConsole::tcodes_str_4, "I2C tools", "i2c <bus> <action> [addr]", 1, callback_i2c_tools);
   console.defineCommand("homeostasis", 'h',  ParsingConsole::tcodes_str_4, "Homeostasis parameters", "", 0, callback_homeostasis_tool);
-
   console.defineCommand("app",         'a',  ParsingConsole::tcodes_str_4, "Select active application.", "", 0, callback_active_app);
   console.defineCommand("sensor",      's',  ParsingConsole::tcodes_str_4, "Sensor tools", "", 0, callback_sensor_tools);
   console.defineCommand("filter",      '\0', ParsingConsole::tcodes_str_3, "Sensor filter info.", "", 0, callback_sensor_filter_info);
   console.defineCommand("fan",         'f',  ParsingConsole::tcodes_str_3, "Fan tools", "", 0, callback_fan_tools);
   console.defineCommand("pump",        'p',  ParsingConsole::tcodes_str_3, "Pump tools", "", 0, callback_pump_tools);
   console.defineCommand("tec",         't',  ParsingConsole::tcodes_str_3, "TEC tools", "", 0, callback_tec_tools);
+  console.defineCommand("str",         '\0', ParsingConsole::tcodes_str_4, "Storage tools", "", 0, console_callback_esp_storage);
 
   console.init();
 
@@ -1582,6 +1581,8 @@ void app_main() {
   i2c1.init();
 
   touch = new SX8634(&_touch_opts);
+
+
 
   // Assign i2c0 to devices attached to it.
   touch->assignBusInstance(&i2c0);
