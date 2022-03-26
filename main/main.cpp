@@ -26,7 +26,6 @@ extern "C" {
 #include "esp_http_client.h"
 #include "mqtt_client.h"
 
-
 #ifdef __cplusplus
 }
 #endif
@@ -115,8 +114,7 @@ const SSD13xxOpts disp_opts(
   ImgOrientation::ROTATION_180,
   DISPLAY_RST_PIN,
   DISPLAY_DC_PIN,
-  DISPLAY_CS_PIN,
-  SSDModel::SSD1331
+  DISPLAY_CS_PIN
 );
 
 const uint8_t sx1503_config[SX1503_SERIALIZE_SIZE] = {
@@ -176,7 +174,7 @@ I2CAdapter i2c1(&i2c1_opts);
 ManuvrLink* m_link = nullptr;
 
 SX1503 sx1503(sx1503_config, SX1503_SERIALIZE_SIZE);   // GPIO on the power control board.
-SSD13xx display(&disp_opts);
+SSD1331 display(&disp_opts);
 BME280I2C baro(baro_settings);
 TMP102 temp_sensor_m(&temp_m_opts);
 TMP102 temp_sensor_0(&temp_0_opts);
@@ -1581,8 +1579,6 @@ void app_main() {
   i2c1.init();
 
   touch = new SX8634(&_touch_opts);
-
-
 
   // Assign i2c0 to devices attached to it.
   touch->assignBusInstance(&i2c0);

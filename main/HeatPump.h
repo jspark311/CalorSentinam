@@ -66,10 +66,10 @@
 #define TEC_BANK1_N_PIN      7  // H-bridge control
 
 // 3V3 power domain.
-#define RESERVED_IN_0_PIN    8  // 
-#define RESERVED_IN_1_PIN    9  // 
-#define RESERVED_IN_2_PIN   10  // 
-#define RESERVED_IN_3_PIN   11  // 
+#define RESERVED_IN_0_PIN    8  //
+#define RESERVED_IN_1_PIN    9  //
+#define RESERVED_IN_2_PIN   10  //
+#define RESERVED_IN_3_PIN   11  //
 #define RESERVED_IN_4_PIN   12  //
 #define RESERVED_IN_5_PIN   13  //
 #define CIRCUIT_CONF1_PIN   14  // Used to tell firmware about the heat circuit.
@@ -256,7 +256,7 @@ class HomeostasisParams {
 extern SPIAdapter spi_bus;
 extern I2CAdapter i2c0;
 extern I2CAdapter i2c1;
-extern SSD13xx display;
+extern SSD1331 display;
 
 extern SX1503 sx1503;
 extern SX8634* touch;
