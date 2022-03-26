@@ -1438,9 +1438,6 @@ void manuvr_task(void* pvParameter) {
 
   while (1) {
     bool should_sleep = true;
-    while (0 < spi_bus.poll()) {
-      should_sleep = false;
-    }
     while (0 < spi_bus.service_callback_queue()) {
       should_sleep = false;
     }
