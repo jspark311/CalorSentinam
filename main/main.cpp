@@ -6,6 +6,8 @@
 /* Local includes */
 #include "HeatPump.h"
 #include "uApp.h"
+#include "Identity/IdentityUUID.h"
+#include "Identity/Identity.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,6 +38,14 @@ extern "C" {
 #define EXAMPLE_SERVER_URL "ian-app.home.joshianlindsay.com"
 //extern const uint8_t server_cert_pem_start[] asm("_binary_ca_cert_pem_start");
 //extern const uint8_t server_cert_pem_end[] asm("_binary_ca_cert_pem_end");
+
+
+/*******************************************************************************
+* TODO: Pending mitosis into a header file....
+*******************************************************************************/
+
+IdentityUUID ident_uuid("HeatPump", "7ed15182-b3fb-4848-b39b-71945091996d");
+
 
 
 /*******************************************************************************
@@ -148,7 +158,19 @@ const SX8634Opts _touch_opts(
   SX8634_IRQ_PIN            // IRQ pin. Input. Active low. Needs pullup.
 );
 SX8634* touch = nullptr;
+ImageCaster* ic_obj = nullptr;
 
+UARTOpts uart1_opts {
+  .bitrate       = 115200,
+  .start_bits    = 0,
+  .bit_per_word  = 8,
+  .stop_bits     = UARTStopBit::STOP_1,
+  .parity        = UARTParityBit::NONE,
+  .flow_control  = UARTFlowControl::NONE,
+  .xoff_char     = 0,
+  .xon_char      = 0,
+  .padding       = 0
+};
 
 ManuvrLinkOpts link_opts(
   100,   // ACK timeout is 100ms.
@@ -161,17 +183,21 @@ ManuvrLinkOpts link_opts(
 );
 
 
-
 static const char* TAG         = "main-cpp";
 const char* console_prompt_str = "HeatPump # ";
 ParsingConsole console(128);
 ESP32StdIO console_uart;
+
 SPIAdapter spi_bus(1, SPICLK_PIN, SPIMOSI_PIN, 255, 8);   // NOTE: No MISO pin.
 I2CAdapter i2c0(&i2c0_opts);
 I2CAdapter i2c1(&i2c1_opts);
 
 /* This object will contain our direct-link via TCP. */
-ManuvrLink* m_link = nullptr;
+
+UARTAdapter link_uart(1, UART1_RX_PIN, UART1_TX_PIN, 255, 255, 256, 256);
+ManuvrLink* mlink_local = nullptr;
+
+
 
 SX1503 sx1503(sx1503_config, SX1503_SERIALIZE_SIZE);   // GPIO on the power control board.
 SSD1331 display(&disp_opts);
@@ -200,9 +226,12 @@ float    fan_pwm_ratio     = 0.0;
 
 uint8_t  tach_fails[5]     = {0, 0, 0, 0, 0};    // Successive tachometer failures.
 
+uint32_t ping_req_time = 0;
+uint32_t ping_nonce    = 0;
+HomeostasisFSM homeostate = HomeostasisFSM::BOOT;
+
 volatile static uint32_t tach_counters[5] = {0, 0, 0, 0, 0};
 
-HomeostasisFSM homeostate = HomeostasisFSM::BOOT;
 
 
 /*******************************************************************************
@@ -285,25 +314,67 @@ int8_t report_fault_condition(int8_t fault) {
 *******************************************************************************/
 void link_callback_state(ManuvrLink* cb_link) {
   StringBuilder log;
-  log.concatf("Link (0x%x) entered state %s\n", cb_link->linkTag(), ManuvrLink::sessionStateStr(cb_link->getState()));
-  //printf("%s\n\n", (const char*) log.string());
+  c3p_log(LOG_LEV_NOTICE, TAG, "Link (0x%x) entered state %s\n", cb_link->linkTag(), ManuvrLink::sessionStateStr(cb_link->getState()));
 }
 
 
 void link_callback_message(uint32_t tag, ManuvrMsg* msg) {
   StringBuilder log;
   KeyValuePair* kvps_rxd = nullptr;
-  log.concatf("link_callback_message(0x%x): \n", tag, msg->uniqueId());
-  msg->printDebug(&log);
+  bool dump_msg_debug = true;
+  log.concatf("link_callback_message(Tag = 0x%08x, ID = %u):\n", tag, msg->uniqueId());
   msg->getPayload(&kvps_rxd);
   if (kvps_rxd) {
-    //kvps_rxd->printDebug(&log);
+    char* fxn_name = nullptr;
+    if (0 == kvps_rxd->valueWithKey("fxn", &fxn_name)) {
+      if (0 == strcmp("PING", fxn_name)) {
+        //dump_msg_debug = false;
+        // Counterparty may have replied to our ping. If not, reply logic will
+        //   handle the response.
+        if (ping_nonce) {
+          if (ping_nonce == msg->uniqueId()) {
+            log.concatf("\tPing returned in %ums.\n", wrap_accounted_delta((uint32_t) micros(), ping_req_time));
+            ping_req_time = 0;
+            ping_nonce    = 0;
+          }
+        }
+      }
+      else if (0 == strcmp("IMG_CAST", fxn_name)) {
+        // Counterparty is sending us an image.
+        //dump_msg_debug = false;
+      }
+      else if (0 == strcmp("WHO", fxn_name)) {
+        // Counterparty wants to know who we are.
+        log.concatf("\tTODO: Unimplemented fxn: \n", fxn_name);
+      }
+      else {
+        log.concatf("\tUnhandled fxn: \n", fxn_name);
+      }
+    }
+    else {
+      log.concat("\tRX'd message with no specified fxn.\n");
+    }
   }
+  else {
+    if (msg->isReply()) {
+      log.concatf("\tRX'd ACK for msg %u.\n", msg->uniqueId());
+      dump_msg_debug = false;
+    }
+    else {
+      log.concat("\tRX'd message with no payload.\n");
+    }
+  }
+
+  if (dump_msg_debug) {
+    log.concat('\n');
+    msg->printDebug(&log);
+  }
+
   if (msg->expectsReply()) {
     int8_t ack_ret = msg->ack();
-    log.concatf("\nlink_callback_message ACK'ing %u returns %d.\n", msg->uniqueId(), ack_ret);
+    log.concatf("\n\tACK'ing %u returns %d.\n", msg->uniqueId(), ack_ret);
   }
-  //printf("%s\n\n", (const char*) log.string());
+  c3p_log(LOG_LEV_INFO, __PRETTY_FUNCTION__, &log);
 }
 
 
@@ -959,7 +1030,21 @@ int callback_touch_tools(StringBuilder* text_return, StringBuilder* args) {
 }
 
 int callback_display_test(StringBuilder* text_return, StringBuilder* args) {
-  return display.console_handler(text_return, args);
+  int ret = -1;
+  char* cmd = args->position_trimmed(0);
+  // We interdict if the command is something specific to this application.
+  if (0 == StringBuilder::strcasecmp(cmd, "cast")) {
+    if (ic_obj) {
+      text_return->concatf("Display cast returns %d\n", ic_obj->apply());
+    }
+    else {
+      text_return->concat("No cast driver.\n");
+    }
+    ret = 0;
+  }
+  else ret = display.console_handler(text_return, args);
+
+  return ret;
 }
 
 int callback_homeostasis_tool(StringBuilder* text_return, StringBuilder* args) {
@@ -980,19 +1065,29 @@ int callback_sx1503_test(StringBuilder* text_return, StringBuilder* args) {
   return ret;
 }
 
+
 int callback_link_tools(StringBuilder* text_return, StringBuilder* args) {
   int ret = -1;
-  char* cmd = args->position_trimmed(0);
-  // We interdict if the command is something specific to this application.
-  if (0 == StringBuilder::strcasecmp(cmd, "desc")) {
-    // Send a description request message.
-    KeyValuePair a((uint32_t) millis(), "time_ms");
-    a.append((uint32_t) randomUInt32(), "rand");
-    int8_t ret_local = m_link->send(&a, true);
-    text_return->concatf("Description request send() returns ID %u\n", ret_local);
-    ret = 0;
+  if (mlink_local) {
+    char* cmd = args->position_trimmed(0);
+    // We interdict if the command is something specific to this application.
+    if (0 == StringBuilder::strcasecmp(cmd, "ping")) {
+      // Send a description request message.
+      ping_req_time = (uint32_t) millis();
+      ping_nonce = randomUInt32();
+      KeyValuePair* a = new KeyValuePair("PING",  "fxn");
+      a->append(ping_req_time, "time_ms");
+      a->append(ping_nonce,    "rand");
+      int8_t ret_local = mlink_local->send(a, true);
+      text_return->concatf("Ping send() returns ID %u\n", ret_local);
+      ret = 0;
+    }
+    else ret = mlink_local->console_handler(text_return, args);
+
   }
-  else ret = m_link->console_handler(text_return, args);
+  else {
+    text_return->concat("mlink_local is not allocated.\n");
+  }
 
   return ret;
 }
@@ -1425,6 +1520,10 @@ int8_t test_homeostasis_program() {
 * Main function and threads                                                    *
 *******************************************************************************/
 
+/**
+* This is the Manuvr thread that runs constatntly, and would be the main loop
+*   of a single-threaded program.
+*/
 void manuvr_task(void* pvParameter) {
   //esp_mqtt_client_config_t mqtt_cfg;
   //memset((void*) &mqtt_cfg, 0, sizeof(mqtt_cfg));
@@ -1502,6 +1601,18 @@ void manuvr_task(void* pvParameter) {
     if (0 < console_uart.poll()) {
       should_sleep = false;
     }
+    if (0 < link_uart.poll()) {
+      should_sleep = false;
+    }
+
+    if (mlink_local) {
+      StringBuilder link_log;
+      mlink_local->poll(&link_log);
+      if (!link_log.isEmpty()) {
+        c3p_log(LOG_LEV_INFO, TAG, &link_log);
+      }
+    }
+
 
     platform.yieldThread();
   }
@@ -1574,6 +1685,18 @@ void app_main() {
   spi_bus.init();
   i2c0.init();
   i2c1.init();
+
+  if (0 == link_uart.init(&uart1_opts)) {
+    mlink_local = new ManuvrLink(&link_opts);
+    if (nullptr != mlink_local) {
+      mlink_local->setCallback(link_callback_state);
+      mlink_local->setCallback(link_callback_message);
+      mlink_local->localIdentity(&ident_uuid);
+      link_uart.readCallback(mlink_local);       // Attach the UART to ManuvrLink...
+      mlink_local->setOutputTarget(&link_uart);  // ...and ManuvrLink to UART.
+      ic_obj = new ImageCaster(mlink_local, (Image*) &display);
+    }
+  }
 
   touch = new SX8634(&_touch_opts);
 

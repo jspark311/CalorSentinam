@@ -10,11 +10,13 @@
 #include <ParsingConsole.h>
 #include <StopWatch.h>
 #include <Image/Image.h>
+#include "Image/ImageUtils.h"
 #include <uuid.h>
 #include <SensorFilter.h>
 #include <ManuvrLink/ManuvrLink.h>
 #include <I2CAdapter.h>
 #include <SPIAdapter.h>
+#include "UARTAdapter.h"
 
 #include <cbor-cpp/cbor.h>
 
@@ -32,11 +34,13 @@
 * Pin definitions and hardware constants.
 *******************************************************************************/
 /* Platform pins */
+#define UART1_RX_PIN         2   // INPUT
 #define SX1503_IRQ_PIN       4   // INPUT_PULLUP
 #define FAN_PWM_PIN          5   // ANALOG_OUT  (Outputs PWM at boot)
 #define SX8634_RESET_PIN    12   // OUTPUT  (Boot will fail if pulled high)
 #define DISPLAY_RST_PIN     13   // OUTPUT
 #define DISPLAY_DC_PIN      14   // OUTPUT  (Outputs PWM at boot)
+#define UART1_TX_PIN        15   // OUTPUT  (Outputs PWM at boot)
 #define FAN1_TACH_PIN       16   // INPUT_PULLUP
 #define FAN0_TACH_PIN       17   // INPUT_PULLUP
 #define FAN2_TACH_PIN       18   // INPUT_PULLUP
@@ -164,14 +168,6 @@ enum class SensorID : uint8_t {
   PUMP_SPEED_1         = 10,  //
 };
 
-enum class DataVis : uint8_t {
-  NONE,       // A time-series graph.
-  GRAPH,      // A time-series graph.
-  SCHEMATIC,  // A schematic render.
-  FIELD,      // A 2d array.
-  TEXT        // Prefer alphanumeric readout.
-};
-
 
 /*******************************************************************************
 * Externs to hardware resources
@@ -276,7 +272,7 @@ extern TMP102 temp_sensor_3;
 * Externs to software singletons
 *******************************************************************************/
 
-extern ManuvrLink* m_link;
+extern ManuvrLink* mlink_local;
 
 extern HomeostasisParams homeostasis;
 

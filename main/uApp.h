@@ -3,10 +3,11 @@
 *
 *                                                  ---J. Ian Lindsay  2021.12.19
 */
-#include <AbstractPlatform.h>
-#include <StopWatch.h>
-#include <Image/Image.h>
-#include <FlagContainer.h>
+#include "AbstractPlatform.h"
+#include "StopWatch.h"
+#include "Image/Image.h"
+#include "Image/ImageUtils.h"
+#include "FlagContainer.h"
 
 #ifndef __U_APP_H_
 #define __U_APP_H_

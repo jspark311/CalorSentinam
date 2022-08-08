@@ -72,9 +72,10 @@ const char* const getDataVisString(DataVis e) {
   switch (e) {
     case DataVis::NONE:       return "NONE";
     case DataVis::GRAPH:      return "GRAPH";
-    case DataVis::SCHEMATIC:  return "SCHEMATIC";
+    //case DataVis::SCHEMATIC:  return "SCHEMATIC";
     case DataVis::FIELD:      return "FIELD";
     case DataVis::TEXT:       return "TEXT";
+    default: break;
   }
   return "UNKNOWN";
 }
