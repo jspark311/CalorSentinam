@@ -3,21 +3,25 @@
 #include <stdint.h>
 #include <math.h>
 
+/* ManuvrPlatform */
+#include <ESP32.h>
+
 /* CppPotpourri */
 #include <CppPotpourri.h>
 #include <AbstractPlatform.h>
 #include <StringBuilder.h>
 #include <ParsingConsole.h>
 #include <StopWatch.h>
-#include <Image/Image.h>
-#include "Image/ImageUtils.h"
 #include <uuid.h>
+#include <Identity/Identity.h>
+#include <Identity/IdentityUUID.h>
 #include <SensorFilter.h>
-#include <ManuvrLink/ManuvrLink.h>
 #include <I2CAdapter.h>
 #include <SPIAdapter.h>
-#include "UARTAdapter.h"
-
+#include <UARTAdapter.h>
+#include <M2MLink/M2MLink.h>
+#include <Image/Image.h>
+#include <Image/ImageUtils.h>
 #include <cbor-cpp/cbor.h>
 
 /* ManuvrDrivers */
@@ -26,8 +30,12 @@
 #ifndef __HEAT_PUMP_H__
 #define __HEAT_PUMP_H__
 
+// TODO: I _HaTe* that I have replicated this awful pattern of hard-coded
+//   program versions (which are never updated) into so many projects. Finally
+//   decide on a means of doing this that more-closely resembles the awesome
+//   arrangement that I have at LTi for automatically binding the firmware
+//   version to source-control.
 #define TEST_PROG_VERSION           "1.0"
-#define TOUCH_DWELL_LONG_PRESS       1000  // Milliseconds for "long-press".
 
 
 /*******************************************************************************
@@ -122,6 +130,9 @@
 #define RPM_RADIATOR_FAN2_RATING  1700   // What are the fans rated for?
 #define RPM_PUMP0_RATING          1000   // What are the pumps rated for?
 #define RPM_PUMP1_RATING          1000   // What are the pumps rated for?
+
+// Parameters for the touch board.
+#define TOUCH_DWELL_LONG_PRESS       1000  // Milliseconds for "long-press".
 
 
 /*******************************************************************************
@@ -271,8 +282,9 @@ extern TMP102 temp_sensor_3;
 /*******************************************************************************
 * Externs to software singletons
 *******************************************************************************/
-
-extern ManuvrLink* mlink_local;
+// TODO: If you replicate this any further, you deserve the extra work you make
+//   for yourself. This is a terrible pattern for so many reasons...
+extern M2MLink* mlink_local;
 
 extern HomeostasisParams homeostasis;
 

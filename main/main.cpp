@@ -172,14 +172,14 @@ UARTOpts uart1_opts {
   .padding       = 0
 };
 
-ManuvrLinkOpts link_opts(
+M2MLinkOpts link_opts(
   100,   // ACK timeout is 100ms.
   2000,  // Send a KA every 2s.
   2048,  // MTU for this link is 2 kibi.
   TCode::CBOR,   // Payloads should be CBOR encoded.
   // This side of the link will send a KA while IDLE, and
   //   allows remote log write.
-  (MANUVRLINK_FLAG_SEND_KA | MANUVRLINK_FLAG_ALLOW_LOG_WRITE)
+  (M2MLINK_FLAG_SEND_KA | M2MLINK_FLAG_ALLOW_LOG_WRITE)
 );
 
 
@@ -195,7 +195,7 @@ I2CAdapter i2c1(&i2c1_opts);
 /* This object will contain our direct-link via TCP. */
 
 UARTAdapter link_uart(1, UART1_RX_PIN, UART1_TX_PIN, 255, 255, 256, 256);
-ManuvrLink* mlink_local = nullptr;
+M2MLink* mlink_local = nullptr;
 
 
 
@@ -312,13 +312,13 @@ int8_t report_fault_condition(int8_t fault) {
 /*******************************************************************************
 * Link callbacks
 *******************************************************************************/
-void link_callback_state(ManuvrLink* cb_link) {
+void link_callback_state(M2MLink* cb_link) {
   StringBuilder log;
-  c3p_log(LOG_LEV_NOTICE, TAG, "Link (0x%x) entered state %s\n", cb_link->linkTag(), ManuvrLink::sessionStateStr(cb_link->getState()));
+  c3p_log(LOG_LEV_NOTICE, TAG, "Link (0x%x) entered state %s\n", cb_link->linkTag(), M2MLink::sessionStateStr(cb_link->getState()));
 }
 
 
-void link_callback_message(uint32_t tag, ManuvrMsg* msg) {
+void link_callback_message(uint32_t tag, M2MMsg* msg) {
   StringBuilder log;
   KeyValuePair* kvps_rxd = nullptr;
   bool dump_msg_debug = true;
@@ -704,42 +704,42 @@ static int proc_mqtt_payload(const char* topic, uint8_t* buf, unsigned int len) 
   const char* tok1 = (const char*) topic;
   if (0 == StringBuilder::strcasestr(tok1, "/RadioRelay/ble-ping")) {
     int num_val = atoi((const char*) buf);
-    //ManuvrMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
+    //M2MMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
     //event->addArg((uint8_t) 5);
     //event->addArg((uint8_t) num_val);
     //Kernel::staticRaiseEvent(event);
   }
   else if (0 == StringBuilder::strcasestr(tok1, "/RadioRelay/ble-command")) {
     int num_val = atoi((const char*) buf);
-    //ManuvrMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
+    //M2MMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
     //event->addArg((uint8_t) 2);
     //event->addArg((uint8_t) num_val);
     //Kernel::staticRaiseEvent(event);
   }
   else if (0 == StringBuilder::strcasestr(tok1, "/RadioRelay/lora-message")) {
     int num_val = atoi((const char*) buf);
-    //ManuvrMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
+    //M2MMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
     //event->addArg((uint8_t) 4);
     //event->addArg((uint8_t) num_val);
     //Kernel::staticRaiseEvent(event);
   }
   else if (0 == StringBuilder::strcasestr(tok1, "/RadioRelay/lora-command")) {
     int num_val = atoi((const char*) buf);
-    //ManuvrMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
+    //M2MMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
     //event->addArg((uint8_t) 3);
     //event->addArg((uint8_t) num_val);
     //Kernel::staticRaiseEvent(event);
   }
   else if (0 == StringBuilder::strcasestr(tok1, "/RadioRelay/conf")) {
     int num_val = atoi((const char*) buf);
-    //ManuvrMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
+    //M2MMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
     //event->addArg((uint8_t) 1);
     //event->addArg((uint8_t) num_val);
     //Kernel::staticRaiseEvent(event);
   }
   else if (0 == StringBuilder::strcasestr(tok1, "/RadioRelay/ota-update")) {
     int num_val = atoi((const char*) buf);
-    //ManuvrMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
+    //M2MMsg* event = Kernel::returnEvent(MANUVR_MSG_DIMMER_SET_LEVEL);
     //event->addArg((uint8_t) 2);
     //event->addArg((uint8_t) num_val);
     //Kernel::staticRaiseEvent(event);
@@ -1017,16 +1017,24 @@ static void cb_longpress(int button, uint32_t duration) {
 * Console callbacks
 *******************************************************************************/
 
-int callback_help(StringBuilder* text_return, StringBuilder* args) {
-  return console.console_handler_help(text_return, args);
+/* Direct console shunt */
+int callback_help(StringBuilder* txt_ret, StringBuilder* args) {
+  return console.console_handler_help(txt_ret, args);
 }
 
-int callback_console_tools(StringBuilder* text_return, StringBuilder* args) {
-  return console.console_handler_conf(text_return, args);
+/* Direct console shunt */
+int callback_console_tools(StringBuilder* txt_ret, StringBuilder* args) {
+  return console.console_handler_conf(txt_ret, args);
 }
 
-int callback_touch_tools(StringBuilder* text_return, StringBuilder* args) {
-  return touch->console_handler(text_return, args);
+/* Direct console shunt */
+int callback_touch_tools(StringBuilder* txt_ret, StringBuilder* args) {
+  return touch->console_handler(txt_ret, args);
+}
+
+/* Direct console shunt */
+int console_tool_homeostasis(StringBuilder* txt_ret, StringBuilder* args) {
+  return homeostasis.console_handler(txt_ret, args);
 }
 
 int callback_display_test(StringBuilder* text_return, StringBuilder* args) {
@@ -1047,10 +1055,6 @@ int callback_display_test(StringBuilder* text_return, StringBuilder* args) {
   return ret;
 }
 
-int callback_homeostasis_tool(StringBuilder* text_return, StringBuilder* args) {
-  return homeostasis.console_handler(text_return, args);
-}
-
 int callback_sx1503_test(StringBuilder* text_return, StringBuilder* args) {
   int ret = -1;
   char* cmd = args->position_trimmed(0);
@@ -1066,6 +1070,10 @@ int callback_sx1503_test(StringBuilder* text_return, StringBuilder* args) {
 }
 
 
+/*
+* TODO: Locally pre-empted console handler to facilitate `ping`, which is no
+*   longer required. Reduce into a shunt.
+*/
 int callback_link_tools(StringBuilder* text_return, StringBuilder* args) {
   int ret = -1;
   if (mlink_local) {
@@ -1621,9 +1629,11 @@ void manuvr_task(void* pvParameter) {
 
 
 /*******************************************************************************
-* Setup function
+* Setup function. This will be the entry-point for our code from ESP-IDF's
+*   boilerplate. Since we don't trust the sdkconfig to have specified a stack
+*   of appropriate depth, we do our setup, launch any threads we want, and the
+*   let this thread die.
 *******************************************************************************/
-
 void app_main() {
   /*
   * The platform object is created on the stack, but takes no action upon
@@ -1652,30 +1662,29 @@ void app_main() {
   console.localEcho(true);
   console.printHelpOnFail(true);
 
-  console.defineCommand("help",        '?',  ParsingConsole::tcodes_str_1, "Prints help to console.", "[<specific command>]", 0, callback_help);
-  console.defineCommand("console",     '\0', ParsingConsole::tcodes_str_3, "Console conf.", "[echo|prompt|force|rxterm|txterm]", 0, callback_console_tools);
+  console.defineCommand("help",        '?',  "Prints help to console.", "[<specific command>]", 0, callback_help);
+  console.defineCommand("console",     '\0', "Console conf.", "[echo|prompt|force|rxterm|txterm]", 0, callback_console_tools);
   platform.configureConsole(&console);
-  console.defineCommand("sx",          '\0', ParsingConsole::tcodes_str_4, "SX1503 test", "", 0, callback_sx1503_test);
-  console.defineCommand("touch",       '\0', ParsingConsole::tcodes_str_4, "SX8634 tools", "", 0, callback_touch_tools);
-  console.defineCommand("disp",        'd',  ParsingConsole::tcodes_str_4, "Display test", "", 0, callback_display_test);
-  console.defineCommand("link",        'l',  ParsingConsole::tcodes_str_4, "Linked device tools.", "", 0, callback_link_tools);
-  console.defineCommand("spi",         '\0', ParsingConsole::tcodes_str_3, "SPI debug.", "", 1, callback_spi_debug);
-  console.defineCommand("i2c",         '\0', ParsingConsole::tcodes_str_4, "I2C tools", "i2c <bus> <action> [addr]", 1, callback_i2c_tools);
-  console.defineCommand("homeostasis", 'h',  ParsingConsole::tcodes_str_4, "Homeostasis parameters", "", 0, callback_homeostasis_tool);
-  console.defineCommand("app",         'a',  ParsingConsole::tcodes_str_4, "Select active application.", "", 0, callback_active_app);
-  console.defineCommand("sensor",      's',  ParsingConsole::tcodes_str_4, "Sensor tools", "", 0, callback_sensor_tools);
-  console.defineCommand("filter",      '\0', ParsingConsole::tcodes_str_3, "Sensor filter info.", "", 0, callback_sensor_filter_info);
-  console.defineCommand("fan",         'f',  ParsingConsole::tcodes_str_3, "Fan tools", "", 0, callback_fan_tools);
-  console.defineCommand("pump",        'p',  ParsingConsole::tcodes_str_3, "Pump tools", "", 0, callback_pump_tools);
-  console.defineCommand("tec",         't',  ParsingConsole::tcodes_str_3, "TEC tools", "", 0, callback_tec_tools);
-  console.defineCommand("str",         '\0', ParsingConsole::tcodes_str_4, "Storage tools", "", 0, console_callback_esp_storage);
+  console.defineCommand("sx",          '\0', "SX1503 test", "", 0, callback_sx1503_test);
+  console.defineCommand("touch",       '\0', "SX8634 tools", "", 0, callback_touch_tools);
+  console.defineCommand("disp",        'd',  "Display test", "", 0, callback_display_test);
+  console.defineCommand("link",        'l',  "Linked device tools.", "", 0, callback_link_tools);
+  console.defineCommand("spi",         '\0', "SPI debug.", "", 1, callback_spi_debug);
+  console.defineCommand("i2c",         '\0', "I2C tools", "i2c <bus> <action> [addr]", 1, callback_i2c_tools);
+  console.defineCommand("homeostasis", 'h',  "Homeostasis parameters", "", 0, console_tool_homeostasis);
+  console.defineCommand("app",         'a',  "Select active application.", "", 0, callback_active_app);
+  console.defineCommand("sensor",      's',  "Sensor tools", "", 0, callback_sensor_tools);
+  console.defineCommand("filter",      '\0', "Sensor filter info.", "", 0, callback_sensor_filter_info);
+  console.defineCommand("fan",         'f',  "Fan tools", "", 0, callback_fan_tools);
+  console.defineCommand("pump",        'p',  "Pump tools", "", 0, callback_pump_tools);
+  console.defineCommand("tec",         't',  "TEC tools", "", 0, callback_tec_tools);
+  console.defineCommand("str",         '\0', "Storage tools", "", 0, console_callback_esp_storage);
 
   console.init();
 
   StringBuilder ptc("HeatPump ");
   ptc.concat(TEST_PROG_VERSION);
   ptc.concat("\t Build date " __DATE__ " " __TIME__ "\n");
-  console.printToLog(&ptc);
 
   /* Allocate memory for the filters. */
   if (0 != init_sensor_memory()) {
@@ -1687,13 +1696,13 @@ void app_main() {
   i2c1.init();
 
   if (0 == link_uart.init(&uart1_opts)) {
-    mlink_local = new ManuvrLink(&link_opts);
+    mlink_local = new M2MLink(&link_opts);
     if (nullptr != mlink_local) {
       mlink_local->setCallback(link_callback_state);
       mlink_local->setCallback(link_callback_message);
       mlink_local->localIdentity(&ident_uuid);
-      link_uart.readCallback(mlink_local);       // Attach the UART to ManuvrLink...
-      mlink_local->setOutputTarget(&link_uart);  // ...and ManuvrLink to UART.
+      link_uart.readCallback(mlink_local);       // Attach the UART to M2MLink...
+      mlink_local->setOutputTarget(&link_uart);  // ...and M2MLink to UART.
       ic_obj = new ImageCaster(mlink_local, (Image*) &display);
     }
   }
@@ -1737,11 +1746,18 @@ void app_main() {
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_start());
 
-  // Spawn worker threads, note the time, and terminate thread.
+  // Write our boot log to the UART.
+  console.printToLog(&ptc);
+
+  // Spawn worker thread for Manuvr's use.
   xTaskCreate(manuvr_task, "_manuvr", 32768, NULL, (tskIDLE_PRIORITY), NULL);
+
+  // TODO: Spawn worker thread for wifi use.
   //xTaskCreate(&ota_task, "ota_task", 8192, NULL, 5, NULL);
-  config_time = millis();
   wifi_scan();
+
+  // Note the time it took to do setup, and allow THIS thread to gracefully terminate.
+  config_time = millis();
 }
 
 #ifdef __cplusplus
