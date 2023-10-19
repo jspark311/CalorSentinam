@@ -250,7 +250,7 @@ void IRAM_ATTR isr_pump1_tach_fxn() {    tach_counters[TACH_IDX_PUMP1]++;   }
 
 void update_tach_values() {
   const uint32_t now = millis();
-  const uint32_t ms_delta_tach = wrap_accounted_delta(last_tach_check, now);
+  const uint32_t ms_delta_tach = millis_since(last_tach_check);
   // Every second or so, update the tach values.
   if (ms_delta_tach >= homeostasis.period_tach_check) {
     //printf("update_tach_values(): %u  %u  %u  %u  %u\n", tach_counters[0], tach_counters[1], tach_counters[2], tach_counters[3], tach_counters[4]);
@@ -333,7 +333,7 @@ void link_callback_message(uint32_t tag, M2MMsg* msg) {
         //   handle the response.
         if (ping_nonce) {
           if (ping_nonce == msg->uniqueId()) {
-            log.concatf("\tPing returned in %ums.\n", wrap_accounted_delta((uint32_t) micros(), ping_req_time));
+            log.concatf("\tPing returned in %ums.\n", millis_since(ping_req_time));
             ping_req_time = 0;
             ping_nonce    = 0;
           }
@@ -1594,7 +1594,7 @@ void manuvr_task(void* pvParameter) {
     update_tach_values();
     test_homeostasis_program();
 
-    if (H_BRIDGE_DEADBAND_MS <= wrap_accounted_delta(millis(), last_tec_change)) {
+    if (H_BRIDGE_DEADBAND_MS <= millis_since(last_tec_change)) {
     }
 
     uint32_t millis_now = millis();

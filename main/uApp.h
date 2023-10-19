@@ -4,7 +4,7 @@
 *                                                  ---J. Ian Lindsay  2021.12.19
 */
 #include "AbstractPlatform.h"
-#include "StopWatch.h"
+#include "TimerTools.h"
 #include "Image/Image.h"
 #include "Image/ImageUtils.h"
 #include "FlagContainer.h"

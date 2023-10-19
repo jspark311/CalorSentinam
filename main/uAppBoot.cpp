@@ -1,7 +1,5 @@
 #include <CppPotpourri.h>
 #include <SensorFilter.h>
-#include <SPIAdapter.h>
-#include <I2CAdapter.h>
 
 #include "HeatPump.h"
 #include "uApp.h"
@@ -313,7 +311,7 @@ void uAppBoot::_redraw_window() {
     i++;
   }
 
-  if (wrap_accounted_delta(_last_init_sent, millis()) >= UAPP_BOOT_INIT_TIMEOUT) {
+  if (millis_since(_last_init_sent) >= UAPP_BOOT_INIT_TIMEOUT) {
     for (uint8_t n = 0; n < INIT_LIST_LEN; n++) {
       if (!_init_sent_flags.value(INIT_LIST[n].flag_mask)) {
         _init_sent_flags.set(INIT_LIST[n].flag_mask);
