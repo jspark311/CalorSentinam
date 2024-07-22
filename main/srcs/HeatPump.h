@@ -1,3 +1,6 @@
+#ifndef __HEAT_PUMP_H__
+#define __HEAT_PUMP_H__
+
 /* Compiler */
 #include <inttypes.h>
 #include <stdint.h>
@@ -7,28 +10,23 @@
 #include <ESP32.h>
 
 /* CppPotpourri */
-#include <CppPotpourri.h>
-#include <AbstractPlatform.h>
-#include <StringBuilder.h>
-#include <ParsingConsole.h>
-#include <TimerTools.h>
-#include <uuid.h>
-#include <Identity/Identity.h>
-#include <Identity/IdentityUUID.h>
-#include <SensorFilter.h>
-#include <BusQueue/I2CAdapter.h>
-#include <BusQueue/SPIAdapter.h>
-#include <BusQueue/UARTAdapter.h>
-#include <M2MLink/M2MLink.h>
-#include <Image/Image.h>
-#include <Image/ImageUtils.h>
-#include <cbor-cpp/cbor.h>
+#include "CppPotpourri.h"
+#include "AbstractPlatform.h"
+#include "StringBuilder.h"
+#include "Console/C3PConsole.h"
+#include "TimerTools/TimerTools.h"
+#include "Identity/Identity.h"
+#include "Identity/IdentityUUID.h"
+#include "TimeSeries/TimeSeries.h"
+#include "BusQueue/I2CAdapter.h"
+#include "BusQueue/SPIAdapter.h"
+#include "BusQueue/UARTAdapter.h"
+#include "M2MLink/M2MLink.h"
+#include "Image/Image.h"
+#include "Image/ImageUtils.h"
 
 /* ManuvrDrivers */
-#include <ManuvrDrivers.h>
-
-#ifndef __HEAT_PUMP_H__
-#define __HEAT_PUMP_H__
+#include "ManuvrDrivers.h"
 
 // TODO: I _HaTe* that I have replicated this awful pattern of hard-coded
 //   program versions (which are never updated) into so many projects. Finally
@@ -288,29 +286,29 @@ extern M2MLink* mlink_local;
 
 extern HomeostasisParams homeostasis;
 
-/* SensorFilters. These are the memory hogs. */
-extern SensorFilter<float> temperature_filter_m;
-extern SensorFilter<float> temperature_filter_0;
-extern SensorFilter<float> temperature_filter_1;
-extern SensorFilter<float> temperature_filter_2;
-extern SensorFilter<float> temperature_filter_3;
+/* TimeSeries. These are the memory hogs. */
+extern TimeSeries<float> temperature_filter_m;
+extern TimeSeries<float> temperature_filter_0;
+extern TimeSeries<float> temperature_filter_1;
+extern TimeSeries<float> temperature_filter_2;
+extern TimeSeries<float> temperature_filter_3;
 
-extern SensorFilter<float> pressure_filter;
-extern SensorFilter<float> humidity_filter;
-extern SensorFilter<float> air_temp_filter;
+extern TimeSeries<float> pressure_filter;
+extern TimeSeries<float> humidity_filter;
+extern TimeSeries<float> air_temp_filter;
 
-extern SensorFilter<uint16_t> fan_speed_0;
-extern SensorFilter<uint16_t> fan_speed_1;
-extern SensorFilter<uint16_t> fan_speed_2;
-extern SensorFilter<uint16_t> pump_speed_0;
-extern SensorFilter<uint16_t> pump_speed_1;
+extern TimeSeries<uint16_t> fan_speed_0;
+extern TimeSeries<uint16_t> fan_speed_1;
+extern TimeSeries<uint16_t> fan_speed_2;
+extern TimeSeries<uint16_t> pump_speed_0;
+extern TimeSeries<uint16_t> pump_speed_1;
 
 
 /*******************************************************************************
 * Function prototypes
 *******************************************************************************/
 int8_t init_sensor_memory();
-SensorFilter<float>* getTemperatureFilter(uint8_t idx);
+TimeSeries<float>* getTemperatureFilter(uint8_t idx);
 
 void ledOn(uint8_t idx, uint32_t duration, uint16_t intensity = 3500);
 void timeoutCheckVibLED();
@@ -339,25 +337,25 @@ void render_button_icon(uint8_t sym, int x, int y, uint16_t color);
 void draw_graph_obj(
   int x, int y, int w, int h, uint16_t color0, uint16_t color1, uint16_t color2,
   bool draw_base, bool draw_v_ticks, bool draw_h_ticks,
-  SensorFilter<float>* filt0, SensorFilter<float>* filt1, SensorFilter<float>* filt2
+  TimeSeries<float>* filt0, TimeSeries<float>* filt1, TimeSeries<float>* filt2
 );
 
 void draw_graph_obj(
   int x, int y, int w, int h, uint16_t color0, uint16_t color1,
   bool draw_base, bool draw_v_ticks, bool draw_h_ticks,
-  SensorFilter<float>* filt0, SensorFilter<float>* filt1
+  TimeSeries<float>* filt0, TimeSeries<float>* filt1
 );
 
 void draw_graph_obj(
   int x, int y, int w, int h, uint16_t color,
   bool draw_base, bool draw_v_ticks, bool draw_h_ticks,
-  SensorFilter<float>* filt
+  TimeSeries<float>* filt
 );
 
 void draw_graph_obj(
   int x, int y, int w, int h, uint16_t color,
   bool draw_base, bool draw_v_ticks, bool draw_h_ticks,
-  SensorFilter<uint32_t>* filt
+  TimeSeries<uint32_t>* filt
 );
 
 void draw_progress_bar_horizontal(
@@ -374,7 +372,7 @@ void draw_data_square_field(
   int x, int y, int w, int h,
   uint32_t flags,
   float* range_min, float* range_max,
-  SensorFilter<float>* filt
+  TimeSeries<float>* filt
 );
 
 void draw_data_view_selector(

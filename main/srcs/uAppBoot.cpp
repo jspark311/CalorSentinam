@@ -1,6 +1,3 @@
-#include <CppPotpourri.h>
-#include <SensorFilter.h>
-
 #include "HeatPump.h"
 #include "uApp.h"
 

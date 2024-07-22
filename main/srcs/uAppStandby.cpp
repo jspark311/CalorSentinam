@@ -1,12 +1,10 @@
-#include <CppPotpourri.h>
-#include <SensorFilter.h>
 #include "uApp.h"
 #include "HeatPump.h"
 
 
-uAppConfigurator::uAppConfigurator() : uApp("Config", (Image*) &display) {}
+uAppStandby::uAppStandby() : uApp("Standby", (Image*) &display) {}
 
-uAppConfigurator::~uAppConfigurator() {}
+uAppStandby::~uAppStandby() {}
 
 
 
@@ -20,9 +18,8 @@ uAppConfigurator::~uAppConfigurator() {}
 *
 * @return 0 for no lifecycle FSM change, 1 for FSM increment, -1 for halt.
 */
-int8_t uAppConfigurator::_lc_on_preinit() {
+int8_t uAppStandby::_lc_on_preinit() {
   int8_t ret = 1;
-  redraw_app_window();
   return ret;
 }
 
@@ -33,8 +30,9 @@ int8_t uAppConfigurator::_lc_on_preinit() {
 *
 * @return 0 for no lifecycle FSM change, 1 for FSM increment, -1 for halt.
 */
-int8_t uAppConfigurator::_lc_on_active() {
+int8_t uAppStandby::_lc_on_active() {
   int8_t ret = 0;
+  FB->fill(BLACK);
   return ret;
 }
 
@@ -45,7 +43,7 @@ int8_t uAppConfigurator::_lc_on_active() {
 *
 * @return 0 for no lifecycle FSM change, 1 for FSM increment, -1 for halt.
 */
-int8_t uAppConfigurator::_lc_on_teardown() {
+int8_t uAppStandby::_lc_on_teardown() {
   int8_t ret = 1;
   return ret;
 }
@@ -57,7 +55,7 @@ int8_t uAppConfigurator::_lc_on_teardown() {
 *
 * @return 0 for no lifecycle FSM change, 1 for FSM reset to PREINIT, -1 for halt.
 */
-int8_t uAppConfigurator::_lc_on_inactive() {
+int8_t uAppStandby::_lc_on_inactive() {
   int8_t ret = 1;
   return ret;
 }
@@ -69,40 +67,25 @@ int8_t uAppConfigurator::_lc_on_inactive() {
 *
 * @return 0 for no change, 1 for display refresh, -1 for application change.
 */
-int8_t uAppConfigurator::_process_user_input() {
-  int8_t ret = 1;
+int8_t uAppStandby::_process_user_input() {
+  int8_t ret = 0;
 
   if (_slider_current != _slider_pending) {
-    redraw_app_window();
     _slider_current = _slider_pending;
-    FB->fill(0);
-    ret = 1;
+    ret = -1;   // Return to the previous uApp.
   }
   if (_buttons_current != _buttons_pending) {
     uint16_t diff = _buttons_current ^ _buttons_pending;
-    ret = 1;
-    if (diff & 0x0001) {   // Interpret a cancel press as a return to APP_SELECT.
-      uApp::setAppActive(AppID::APP_SELECT);
-      ret = -1;
-    }
+    ret = -1;   // Return to the previous uApp.
     _buttons_current = _buttons_pending;
   }
   return ret;
 }
 
 
-
 /*
 * Draws the app.
 */
-void uAppConfigurator::_redraw_window() {
-  FB->setTextColor(WHITE, 0x0000);
-  FB->setCursor(0, 12);
-  FB->writeString("Allow sub-zero:\n    ");
-  FB->setTextColor(homeostasis.conf_sw1_enable_subzero ? RED:GREEN, 0x0000);
-  FB->writeString(homeostasis.conf_sw1_enable_subzero ? "ON" : "OFF");
-
-  FB->writeString("\nTEC arrangement:\n    ");
-  FB->setTextColor(BLUE, 0x0000);
-  FB->writeString(homeostasis.conf_sw2_staged_tec_banks ? "Staged" : "Ganged");
+void uAppStandby::_redraw_window() {
+  FB->fill(BLACK);
 }

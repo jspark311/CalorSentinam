@@ -26,6 +26,7 @@ extern "C" {
 //#include "esp_ota_ops.h"
 //#include "esp_flash_partitions.h"
 #include "esp_http_client.h"
+#include "esp_wifi.h"
 #include "mqtt_client.h"
 
 #ifdef __cplusplus
@@ -188,13 +189,13 @@ const char* console_prompt_str = "HeatPump # ";
 ParsingConsole console(128);
 ESP32StdIO console_uart;
 
-SPIAdapter spi_bus(1, SPICLK_PIN, SPIMOSI_PIN, 255, 8);   // NOTE: No MISO pin.
-I2CAdapter i2c0(&i2c0_opts);
-I2CAdapter i2c1(&i2c1_opts);
+SPIAdapter spi_bus(1, SPICLK_PIN, SPIMOSI_PIN, 255, 8, 16);  // NOTE: No MISO pin.
+I2CAdapter i2c0(&i2c0_opts, 12, 24);
+I2CAdapter i2c1(&i2c1_opts, 12, 24);
 
 /* This object will contain our direct-link via TCP. */
 
-UARTAdapter link_uart(1, UART1_RX_PIN, UART1_TX_PIN, 255, 255, 256, 256);
+PlatformUART link_uart(1, UART1_RX_PIN, UART1_TX_PIN, 255, 255, 256, 256);
 M2MLink* mlink_local = nullptr;
 
 
@@ -237,11 +238,11 @@ volatile static uint32_t tach_counters[5] = {0, 0, 0, 0, 0};
 /*******************************************************************************
 * ISRs
 *******************************************************************************/
-void IRAM_ATTR isr_fan0_tach_fxn() {     tach_counters[TACH_IDX_FAN0]++;    }
-void IRAM_ATTR isr_fan1_tach_fxn() {     tach_counters[TACH_IDX_FAN1]++;    }
-void IRAM_ATTR isr_fan2_tach_fxn() {     tach_counters[TACH_IDX_FAN2]++;    }
-void IRAM_ATTR isr_pump0_tach_fxn() {    tach_counters[TACH_IDX_PUMP0]++;   }
-void IRAM_ATTR isr_pump1_tach_fxn() {    tach_counters[TACH_IDX_PUMP1]++;   }
+void IRAM_ATTR isr_fan0_tach_fxn() {     tach_counters[TACH_IDX_FAN0] += 1;    }
+void IRAM_ATTR isr_fan1_tach_fxn() {     tach_counters[TACH_IDX_FAN1] += 1;    }
+void IRAM_ATTR isr_fan2_tach_fxn() {     tach_counters[TACH_IDX_FAN2] += 1;    }
+void IRAM_ATTR isr_pump0_tach_fxn() {    tach_counters[TACH_IDX_PUMP0] += 1;   }
+void IRAM_ATTR isr_pump1_tach_fxn() {    tach_counters[TACH_IDX_PUMP1] += 1;   }
 
 
 /*******************************************************************************
@@ -261,7 +262,7 @@ void update_tach_values() {
       //   with sample periods in terms of milliseconds. Thus....
       uint16_t tmp_tach_rpm = (uint16_t) (tmp_tach_count * (15000.0 / (float) ms_delta_tach));
       //printf("tmp_tach_rpm:   %u\n", tmp_tach_rpm);
-      SensorFilter<uint16_t>* filter = nullptr;
+      TimeSeries<uint16_t>* filter = nullptr;
       uint8_t tach_alert_threshold = 0;
       switch (i) {
         case TACH_IDX_FAN0:     filter = &fan_speed_0;     break;
@@ -282,7 +283,7 @@ void update_tach_values() {
           tach_alert_threshold = homeostasis.hysteresis_pump_alert;
           break;
       }
-      filter->feedFilter(tmp_tach_rpm);
+      filter->feedSeries(tmp_tach_rpm);
       if (0 == tmp_tach_rpm) {
         tach_fails[i]++;
         if (tach_fails[i] >= tach_alert_threshold) {
@@ -314,7 +315,7 @@ int8_t report_fault_condition(int8_t fault) {
 *******************************************************************************/
 void link_callback_state(M2MLink* cb_link) {
   StringBuilder log;
-  c3p_log(LOG_LEV_NOTICE, TAG, "Link (0x%x) entered state %s\n", cb_link->linkTag(), M2MLink::sessionStateStr(cb_link->getState()));
+  c3p_log(LOG_LEV_NOTICE, TAG, "Link (0x%x) entered state %s\n", cb_link->linkTag(), M2MLink::sessionStateStr(cb_link->currentState()));
 }
 
 
@@ -1221,7 +1222,7 @@ int callback_sensor_filter_info(StringBuilder* text_return, StringBuilder* args)
   if (0 < args->count()) {
     int   arg0 = args->position_as_int(0);
     char* cmd  = args->position_trimmed(1);
-    SensorFilter<float>* sel_sen = nullptr;
+    TimeSeries<float>* sel_sen = nullptr;
     switch (arg0) {
       case 1:   sel_sen = &temperature_filter_m;    break;
       case 2:   sel_sen = &temperature_filter_0;    break;
@@ -1241,28 +1242,21 @@ int callback_sensor_filter_info(StringBuilder* text_return, StringBuilder* args)
     }
     if (nullptr != sel_sen) {
       if (0 == StringBuilder::strcasecmp(cmd, "info")) {
-        sel_sen->printFilter(text_return);
+        sel_sen->printSeries(text_return);
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "purge")) {
         sel_sen->purge();
-        text_return->concatf("Filter for SensorID %d purged.\n", arg0);
+        text_return->concatf("TimeSeries for SensorID %d purged.\n", arg0);
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "depth")) {
         if (2 < args->count()) {
           uint arg2 = (uint) args->position_as_int(2);
           text_return->concatf("Setting sample depth for filter %d returned %d.\n", arg0, sel_sen->windowSize(arg2));
         }
-        text_return->concatf("Filter for SensorID %d is %u samples deep.\n", arg0, sel_sen->windowSize());
-      }
-      else if (0 == StringBuilder::strcasecmp(cmd, "strat")) {
-        if (2 < args->count()) {
-          FilteringStrategy arg2 = (FilteringStrategy) args->position_as_int(2);
-          text_return->concatf("Setting sample depth for filter %d returned %d.\n", arg0, sel_sen->setStrategy(arg2));
-        }
-        text_return->concatf("Filter strategy for SensorID %d is %s.\n", arg0, getFilterStr(sel_sen->strategy()));
+        text_return->concatf("TimeSeries for SensorID %d is %u samples deep.\n", arg0, sel_sen->windowSize());
       }
       else {
-        text_return->concatf("Filter value for SensorID %d: %.3f.\n", arg0, (double) sel_sen->value());
+        text_return->concatf("TimeSeries value for SensorID %d: %.3f.\n", arg0, (double) sel_sen->value());
       }
     }
     else {
@@ -1282,9 +1276,9 @@ int callback_fan_tools(StringBuilder* text_return, StringBuilder* args) {
   int ret = 0;
   char* cmd = args->position_trimmed(0);
   if (0 == StringBuilder::strcasecmp(cmd, "info")) {
-    fan_speed_0.printFilter(text_return);
-    fan_speed_1.printFilter(text_return);
-    fan_speed_2.printFilter(text_return);
+    fan_speed_0.printSeries(text_return);
+    fan_speed_1.printSeries(text_return);
+    fan_speed_2.printSeries(text_return);
   }
   else if (0 == StringBuilder::strcasecmp(cmd, "speed")) {
     if (1 < args->count()) {
@@ -1314,7 +1308,7 @@ int callback_pump_tools(StringBuilder* text_return, StringBuilder* args) {
   char* loop = args->position_trimmed(0);
   char* pump_str = "";
   uint8_t pump_id = 255;
-  SensorFilter<uint16_t>* rpm_filter = nullptr;
+  TimeSeries<uint16_t>* rpm_filter = nullptr;
   if (0 == StringBuilder::strcasecmp(loop, "i")) {
     pump_id = 0;
     pump_str = "Internal";
@@ -1336,7 +1330,7 @@ int callback_pump_tools(StringBuilder* text_return, StringBuilder* args) {
         text_return->concatf("pump_powered(%s, false) returns %d.\n", pump_str, pump_powered(pump_id, false));
       }
       else if (0 == StringBuilder::strcasecmp(cmd, "filter")) {
-        rpm_filter->printFilter(text_return);
+        rpm_filter->printSeries(text_return);
       }
       else print_pump_speed = true;
     }
@@ -1476,7 +1470,7 @@ int8_t test_homeostasis_program() {
   if (HomeostasisFSM::PROG_RUNNING == homeostate) {
     bool orderly_return_to_idle = false;
     for (uint8_t i = 0; i < 6; i++) {    // Cycle through each temperature sensor, checking the values.
-      SensorFilter<float>* filter = getTemperatureFilter(i);
+      TimeSeries<float>* filter = getTemperatureFilter(i);
       float current_temp = filter->value();
 
       switch (i) {
@@ -1555,39 +1549,39 @@ void manuvr_task(void* pvParameter) {
     if (sx1503.devFound()) {          sx1503.poll();           }
     if (baro.devFound()) {
       if (0 < baro.poll()) {
-        humidity_filter.feedFilter(baro.hum());
-        air_temp_filter.feedFilter(baro.temp());
-        pressure_filter.feedFilter(baro.pres());
+        humidity_filter.feedSeries(baro.hum());
+        air_temp_filter.feedSeries(baro.temp());
+        pressure_filter.feedSeries(baro.pres());
       }
     }
     if (temp_sensor_m.devFound()) {
       temp_sensor_m.poll();
       if (temp_sensor_m.dataReady()) {
-        temperature_filter_m.feedFilter(temp_sensor_m.temperature());
+        temperature_filter_m.feedSeries(temp_sensor_m.temperature());
       }
     }
     if (temp_sensor_0.devFound()) {
       temp_sensor_0.poll();
       if (temp_sensor_0.dataReady()) {
-        temperature_filter_0.feedFilter(temp_sensor_0.temperature());
+        temperature_filter_0.feedSeries(temp_sensor_0.temperature());
       }
     }
     if (temp_sensor_1.devFound()) {
       temp_sensor_1.poll();
       if (temp_sensor_1.dataReady()) {
-        temperature_filter_1.feedFilter(temp_sensor_1.temperature());
+        temperature_filter_1.feedSeries(temp_sensor_1.temperature());
       }
     }
     if (temp_sensor_2.devFound()) {
       temp_sensor_2.poll();
       if (temp_sensor_2.dataReady()) {
-        temperature_filter_2.feedFilter(temp_sensor_2.temperature());
+        temperature_filter_2.feedSeries(temp_sensor_2.temperature());
       }
     }
     if (temp_sensor_3.devFound()) {
       temp_sensor_3.poll();
       if (temp_sensor_3.dataReady()) {
-        temperature_filter_3.feedFilter(temp_sensor_3.temperature());
+        temperature_filter_3.feedSeries(temp_sensor_3.temperature());
       }
     }
 
@@ -1609,7 +1603,7 @@ void manuvr_task(void* pvParameter) {
     if (0 < console_uart.poll()) {
       should_sleep = false;
     }
-    if (0 < link_uart.poll()) {
+    if (PollResult::ACTION == link_uart.poll()) {
       should_sleep = false;
     }
 
@@ -1654,8 +1648,8 @@ void app_main() {
 
   /* Start the console UART and attach it to the console. */
   console_uart.readCallback(&console);    // Attach the UART to console...
-  console.setOutputTarget(&console_uart); // ...and console to UART.
-  console.setTXTerminator(LineTerm::CRLF); // Best setting for "idf.py monitor"
+  console.setEfferant(&console_uart);     // ...and console to UART.
+  //console.setTXTerminator(LineTerm::CRLF); // Best setting for "idf.py monitor"
   console.setRXTerminator(LineTerm::LF);   // Best setting for "idf.py monitor"
   console.setPromptString(console_prompt_str);
   console.emitPrompt(true);
@@ -1678,7 +1672,7 @@ void app_main() {
   console.defineCommand("fan",         'f',  "Fan tools", "", 0, callback_fan_tools);
   console.defineCommand("pump",        'p',  "Pump tools", "", 0, callback_pump_tools);
   console.defineCommand("tec",         't',  "TEC tools", "", 0, callback_tec_tools);
-  console.defineCommand("str",         '\0', "Storage tools", "", 0, console_callback_esp_storage);
+  //console.defineCommand("str",         '\0', "Storage tools", "", 0, console_callback_esp_storage);
 
   console.init();
 
@@ -1702,7 +1696,7 @@ void app_main() {
       mlink_local->setCallback(link_callback_message);
       mlink_local->localIdentity(&ident_uuid);
       link_uart.readCallback(mlink_local);       // Attach the UART to M2MLink...
-      mlink_local->setOutputTarget(&link_uart);  // ...and M2MLink to UART.
+      mlink_local->setEfferant(&link_uart);  // ...and M2MLink to UART.
       ic_obj = new ImageCaster(mlink_local, (Image*) &display);
     }
   }
@@ -1710,16 +1704,16 @@ void app_main() {
   touch = new SX8634(&_touch_opts);
 
   // Assign i2c0 to devices attached to it.
-  touch->assignBusInstance(&i2c0);
-  sx1503.assignBusInstance(&i2c0);
-  temp_sensor_m.assignBusInstance(&i2c0);
+  touch->setAdapter(&i2c0);
+  sx1503.setAdapter(&i2c0);
+  temp_sensor_m.setAdapter(&i2c0);
 
   // Assign i2c1 to devices attached to it.
-  baro.assignBusInstance(&i2c1);
-  temp_sensor_0.assignBusInstance(&i2c1);
-  temp_sensor_1.assignBusInstance(&i2c1);
-  temp_sensor_2.assignBusInstance(&i2c1);
-  temp_sensor_3.assignBusInstance(&i2c1);
+  baro.setAdapter(&i2c1);
+  temp_sensor_0.setAdapter(&i2c1);
+  temp_sensor_1.setAdapter(&i2c1);
+  temp_sensor_2.setAdapter(&i2c1);
+  temp_sensor_3.setAdapter(&i2c1);
 
   // Callback setup for various drivers...
   touch->setButtonFxn(cb_button);

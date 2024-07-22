@@ -1,12 +1,10 @@
-#include <CppPotpourri.h>
-#include <SensorFilter.h>
 #include "uApp.h"
 #include "HeatPump.h"
 
 
-uAppStandby::uAppStandby() : uApp("Standby", (Image*) &display) {}
+uAppComms::uAppComms() : uApp("Comms", (Image*) &display) {}
 
-uAppStandby::~uAppStandby() {}
+uAppComms::~uAppComms() {}
 
 
 
@@ -20,8 +18,9 @@ uAppStandby::~uAppStandby() {}
 *
 * @return 0 for no lifecycle FSM change, 1 for FSM increment, -1 for halt.
 */
-int8_t uAppStandby::_lc_on_preinit() {
+int8_t uAppComms::_lc_on_preinit() {
   int8_t ret = 1;
+  redraw_app_window();
   return ret;
 }
 
@@ -32,9 +31,8 @@ int8_t uAppStandby::_lc_on_preinit() {
 *
 * @return 0 for no lifecycle FSM change, 1 for FSM increment, -1 for halt.
 */
-int8_t uAppStandby::_lc_on_active() {
+int8_t uAppComms::_lc_on_active() {
   int8_t ret = 0;
-  FB->fill(BLACK);
   return ret;
 }
 
@@ -45,7 +43,7 @@ int8_t uAppStandby::_lc_on_active() {
 *
 * @return 0 for no lifecycle FSM change, 1 for FSM increment, -1 for halt.
 */
-int8_t uAppStandby::_lc_on_teardown() {
+int8_t uAppComms::_lc_on_teardown() {
   int8_t ret = 1;
   return ret;
 }
@@ -57,7 +55,7 @@ int8_t uAppStandby::_lc_on_teardown() {
 *
 * @return 0 for no lifecycle FSM change, 1 for FSM reset to PREINIT, -1 for halt.
 */
-int8_t uAppStandby::_lc_on_inactive() {
+int8_t uAppComms::_lc_on_inactive() {
   int8_t ret = 1;
   return ret;
 }
@@ -69,25 +67,31 @@ int8_t uAppStandby::_lc_on_inactive() {
 *
 * @return 0 for no change, 1 for display refresh, -1 for application change.
 */
-int8_t uAppStandby::_process_user_input() {
+int8_t uAppComms::_process_user_input() {
   int8_t ret = 0;
 
   if (_slider_current != _slider_pending) {
     _slider_current = _slider_pending;
-    ret = -1;   // Return to the previous uApp.
+    ret = 1;
   }
   if (_buttons_current != _buttons_pending) {
     uint16_t diff = _buttons_current ^ _buttons_pending;
-    ret = -1;   // Return to the previous uApp.
+    ret = 1;
+    if (_buttons_pending == 0x0028) {
+      // Interpret a cancel press as a return to APP_SELECT.
+      uApp::setAppActive(AppID::APP_SELECT);
+      ret = -1;
+    }
     _buttons_current = _buttons_pending;
   }
   return ret;
 }
 
 
+
 /*
-* Draws the app.
+* Draws the tricorder app.
 */
-void uAppStandby::_redraw_window() {
-  FB->fill(BLACK);
+void uAppComms::_redraw_window() {
+  FB->fill(0);
 }

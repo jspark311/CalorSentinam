@@ -1,9 +1,4 @@
 #include "HeatPump.h"
-#include <inttypes.h>
-#include <stdint.h>
-#include <math.h>
-#include <CppPotpourri.h>
-#include <Image/Image.h>
 
 
 static uint32_t off_time_led_r    = 0;      // millis() when LED_R should be disabled.
@@ -272,7 +267,7 @@ void draw_graph_obj(
 void draw_graph_obj(
   int x, int y, int w, int h, uint16_t color0, uint16_t color1, uint16_t color2,
   bool draw_base, bool draw_v_ticks, bool draw_h_ticks,
-  SensorFilter<float>* filt0, SensorFilter<float>* filt1, SensorFilter<float>* filt2
+  TimeSeries<float>* filt0, TimeSeries<float>* filt1, TimeSeries<float>* filt2
 ) {
   const uint16_t DATA_SIZE_0 = filt0->windowSize();
   const uint16_t LAST_SIDX_0 = filt0->lastIndex();
@@ -315,7 +310,7 @@ void draw_graph_obj(
 void draw_graph_obj(
   int x, int y, int w, int h, uint16_t color0, uint16_t color1,
   bool draw_base, bool draw_v_ticks, bool draw_h_ticks,
-  SensorFilter<float>* filt0, SensorFilter<float>* filt1
+  TimeSeries<float>* filt0, TimeSeries<float>* filt1
 ) {
   const uint16_t DATA_SIZE_0 = filt0->windowSize();
   const uint16_t LAST_SIDX_0 = filt0->lastIndex();
@@ -350,7 +345,7 @@ void draw_graph_obj(
 void draw_graph_obj(
   int x, int y, int w, int h, uint16_t color,
   bool draw_base, bool draw_v_ticks, bool draw_h_ticks,
-  SensorFilter<float>* filt
+  TimeSeries<float>* filt
 ) {
   const uint16_t DATA_SIZE = filt->windowSize();
   const uint16_t LAST_SIDX = filt->lastIndex();
@@ -374,7 +369,7 @@ void draw_graph_obj(
 void draw_graph_obj(
   int x, int y, int w, int h, uint16_t color,
   bool draw_base, bool draw_v_ticks, bool draw_h_ticks,
-  SensorFilter<uint32_t>* filt
+  TimeSeries<uint32_t>* filt
 ) {
   const uint16_t  DATA_SIZE = filt->windowSize();
   const uint16_t  LAST_SIDX = filt->lastIndex();
@@ -465,7 +460,7 @@ void draw_data_square_field(
   int x, int y, int w, int h,
   uint32_t flags,
   float* range_min, float* range_max,
-  SensorFilter<float>* filt
+  TimeSeries<float>* filt
 ) {
   const bool lock_range_to_absolute = (flags & GRAPH_FLAG_LOCK_RANGE_V) ? true : false;
   const uint16_t MIN_ELEMENTS = strict_min((uint16_t) filt->windowSize(), (uint16_t) w * h);
@@ -498,7 +493,7 @@ void draw_thermal_loop_status_bug(
   uint16_t pump_rpm,
   bool tec_enabled,
   bool tec_reversed,
-  SensorFilter<float>* filt
+  TimeSeries<float>* filt
 ) {
   int origin_x = x + (w >> 1);
   int origin_y = y + (h >> 1);
